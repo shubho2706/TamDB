@@ -1,16 +1,13 @@
 #pragma once
 
+#include "model/types.h"
+
 #include <cstdint>
 #include <span>
 #include <utility>
 #include <vector>
 
 namespace tamdb {
-
-struct SearchResult {
-    uint64_t id;
-    float score;
-};
 
 class FlatIndex {
 public:

@@ -8,11 +8,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(TAMDB_BUILD_TESTS "Build tests" OFF)
 option(TAMDB_BUILD_BENCHMARKS "Build benchmarks" OFF)
 
-# Library
-add_library(tamdb_lib
-    src/distance.cpp
-    src/flat_index.cpp
+file(GLOB_RECURSE TAMDB_SOURCES CONFIGURE_DEPENDS
+    src/*.cpp
 )
+
+# Exclude main.cpp from library sources
+list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
+
+# Library
+add_library(tamdb_lib ${TAMDB_SOURCES})
 target_include_directories(tamdb_lib PUBLIC include)
 
 # Main executable
@@ -30,10 +34,11 @@ if(TAMDB_BUILD_TESTS)
     FetchContent_MakeAvailable(googletest)
     enable_testing()
 
-    add_executable(tamdb_tests
-        tests/distance_test.cpp
-        tests/flat_index_test.cpp
+    file(GLOB_RECURSE TAMDB_TEST_SOURCES CONFIGURE_DEPENDS
+        tests/*.cpp
     )
+
+    add_executable(tamdb_tests ${TAMDB_TEST_SOURCES})
     target_link_libraries(tamdb_tests PRIVATE tamdb_lib GTest::gtest_main)
     include(GoogleTest)
     gtest_discover_tests(tamdb_tests)
@@ -50,8 +55,10 @@ if(TAMDB_BUILD_BENCHMARKS)
     set(BENCHMARK_ENABLE_TESTING OFF)
     FetchContent_MakeAvailable(benchmark)
 
-    add_executable(tamdb_bench
-        benchmarks/distance_bench.cpp
+    file(GLOB_RECURSE TAMDB_BENCH_SOURCES CONFIGURE_DEPENDS
+        benchmarks/*.cpp
     )
+
+    add_executable(tamdb_bench ${TAMDB_BENCH_SOURCES})
     target_link_libraries(tamdb_bench PRIVATE tamdb_lib benchmark::benchmark_main)
 endif()
