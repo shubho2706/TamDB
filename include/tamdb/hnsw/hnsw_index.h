@@ -4,8 +4,14 @@
 #include <span>
 #include <vector>
 #include <cstdint>
+#include <random>
 
 namespace tamdb {
+
+struct CandidateNode {
+    uint32_t node_idx;
+    float node_dist;
+};
 
 /**
  * A node in the HNSW graph.
@@ -15,7 +21,7 @@ namespace tamdb {
  */
 struct HNSWNode {
     /** User-provided unique identifier for this vector. */
-    uint64_t _id;
+    uint64_t _vector_id;
 
     /**
      * Adjacency lists for each layer this node exists on.
@@ -26,12 +32,6 @@ struct HNSWNode {
      * Higher layers contain exponentially fewer nodes with longer-range links.
      */
     std::vector<std::vector<uint32_t>> adj_list;
-
-    /**
-     * Offset into HNSWIndex::_flat_vector where this node's vector data begins.
-     * The vector occupies _flat_vector[vector_offset .. vector_offset + dimensions).
-     */
-    uint32_t vector_offset;
 };
 
 
@@ -104,6 +104,42 @@ public:
 
 private:
 
+    /**
+     * Draw a random layer level for a newly inserted node.
+     *
+     * Uses the standard HNSW exponentially-decaying level distribution:
+     * level = floor(-ln(U) / ln(M)), where U is uniform in (0, 1].
+     * Level 0 is by far the most common; each higher level is exponentially
+     * rarer, which is what keeps the upper layers sparse.
+     *
+     * @return The top layer this node will occupy (it exists on layers 0..level).
+     */
+    uint32_t random_layer();
+
+    /**
+     * Beam search over a single layer of the graph (the core HNSW primitive).
+     *
+     * Runs a greedy, best-first traversal on `curr_layer` starting from
+     * `entry_points`, always expanding the closest unexplored node next and
+     * keeping the `EF` nearest nodes seen so far. Terminates early once the
+     * closest unexplored node is farther than the current worst keeper.
+     *
+     * Used by both insert (to find neighbor candidates and to zoom between
+     * layers with EF=1) and search (with EF=ef_search on layer 0).
+     *
+     * @param entry_points Internal node indices to seed the search from.
+     * @param EF Beam width: the number of nearest candidates to retain.
+     * @param curr_layer The layer whose adjacency lists are traversed.
+     * @param input_vector The query/target vector to measure distance against.
+     * @return Up to `EF` candidates (internal index + distance), sorted by
+     *         ascending distance (closest first).
+     */
+    std::vector<CandidateNode> search_layer(const std::vector<uint32_t> entry_points,
+                                    const uint32_t EF,
+                                    const uint32_t curr_layer,
+                                    std::span<const float> input_vector);
+
+
     /** Number of dimensions per vector (e.g., 768). */
     size_t _dimensions;
 
@@ -126,7 +162,7 @@ private:
      * Vectors are stored end-to-end: [vec0_dim0, vec0_dim1, ..., vec1_dim0, ...].
      * Node i's vector starts at offset _nodes[i].vector_offset.
      */
-    std::vector<float> _flat_vector;
+    std::vector<float> _flat_vectors;
 
     /**
      * All nodes in the index, stored in insertion order.
@@ -140,7 +176,14 @@ private:
      * This is the node with the highest layer level, used as the
      * starting point for all searches and insertions.
      */
-    uint32_t _root;
+    uint32_t _root = -1;
+
+    /**
+     * For random Level Generation
+     */
+    std::mt19937 _rng;
+    std::uniform_real_distribution<double> _level_dist;
+
 };
 
 } // namespace tamdb

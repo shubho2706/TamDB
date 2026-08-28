@@ -16,7 +16,8 @@ file(GLOB_RECURSE TAMDB_SOURCES CONFIGURE_DEPENDS
 list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
 
 # Library
-add_library(tamdb_lib ${TAMDB_SOURCES})
+add_library(tamdb_lib ${TAMDB_SOURCES}
+    src/hnsw/hnsw_index.cpp)
 target_include_directories(tamdb_lib PUBLIC include)
 
 # Main executable
