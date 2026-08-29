@@ -1,4 +1,4 @@
-#include "tamdb/flat_index.h"
+#include "tamdb/naive/flat_index.h"
 
 #include <gtest/gtest.h>
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "model/types.h"
+#include "tamdb/model/types.h"
 
 #include <cstdint>
 #include <span>

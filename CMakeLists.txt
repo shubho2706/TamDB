@@ -10,6 +10,7 @@ option(TAMDB_BUILD_BENCHMARKS "Build benchmarks" OFF)
 
 file(GLOB_RECURSE TAMDB_SOURCES CONFIGURE_DEPENDS
     src/*.cpp
+    src/*/*.cpp
 )
 
 # Exclude main.cpp from library sources

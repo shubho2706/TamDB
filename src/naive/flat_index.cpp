@@ -1,5 +1,5 @@
-#include "tamdb/flat_index.h"
-#include "tamdb/distance.h"
+#include "tamdb/naive/flat_index.h"
+#include "tamdb/utils/distance.h"
 
 #include <queue>
 #include <algorithm>

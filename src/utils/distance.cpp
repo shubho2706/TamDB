@@ -1,4 +1,4 @@
-#include "tamdb/distance.h"
+#include "tamdb/utils/distance.h"
 
 #include <cmath>
 

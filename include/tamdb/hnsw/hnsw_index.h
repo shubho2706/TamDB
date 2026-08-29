@@ -1,6 +1,6 @@
 #pragma once
 
-#include "model/types.h"
+#include "tamdb/model/types.h"
 #include <span>
 #include <vector>
 #include <cstdint>
@@ -92,7 +92,7 @@ public:
      *
      * Time complexity: O(ef_search * log(N)) where ef_search >= top_k.
      *
-     * @param query The query vector. Must have exactly `dimensions` elements.
+     * @param query_vector The query vector. Must have exactly `dimensions` elements.
      * @param top_k Number of nearest neighbors to return.
      * @param ef_search Exploration factor for search. Controls how many candidates
      *          are explored during graph traversal. Higher values = better recall
@@ -100,7 +100,7 @@ public:
      * @return Vector of SearchResult (id, distance) sorted by ascending distance.
      *         May return fewer than top_k results if the index has fewer vectors.
      */
-    std::vector<SearchResult> search(std::span<const float> query, size_t top_k, size_t ef_search = 200);
+    std::vector<SearchResult> search(std::span<const float> query_vector, size_t top_k, size_t ef_search = 200);
 
 private:
 
@@ -127,18 +127,49 @@ private:
      * Used by both insert (to find neighbor candidates and to zoom between
      * layers with EF=1) and search (with EF=ef_search on layer 0).
      *
-     * @param entry_points Internal node indices to seed the search from.
+     * @param entry_points Candidate nodes to seed the search from (only their
+     *          node_idx is used; the distance is recomputed against input_vector).
      * @param EF Beam width: the number of nearest candidates to retain.
      * @param curr_layer The layer whose adjacency lists are traversed.
      * @param input_vector The query/target vector to measure distance against.
      * @return Up to `EF` candidates (internal index + distance), sorted by
      *         ascending distance (closest first).
      */
-    std::vector<CandidateNode> search_layer(const std::vector<uint32_t> entry_points,
+    std::vector<CandidateNode> search_layer(const std::vector<CandidateNode> entry_points,
                                     const uint32_t EF,
                                     const uint32_t curr_layer,
                                     std::span<const float> input_vector);
 
+
+    /**
+     * Wire a newly inserted node into one layer of the graph.
+     *
+     * Connects the new node to its nearest candidates on `layer` (up to M
+     * edges, or 2*M on layer 0), adding each edge in both directions. When a
+     * neighbor's degree exceeds its cap as a result, that neighbor is pruned
+     * back down via prune_edge.
+     *
+     * @param insert_node_idx Internal index of the node being inserted.
+     * @param layer The layer on which to add the edges.
+     * @param possible_neighbours Candidate neighbors for this layer, sorted by
+     *          ascending distance (as returned by search_layer). The closest
+     *          M (or 2*M on layer 0) are chosen as neighbors.
+     */
+    void connect_layer(const uint32_t insert_node_idx, const uint32_t layer,
+                        const std::vector<CandidateNode>& possible_neighbours);
+
+    /**
+     * Trim an over-connected node back to its edge cap on a layer.
+     *
+     * Called after a node exceeds its degree cap (M, or 2*M on layer 0).
+     * Since a node overflows by exactly one edge per insert, this removes the
+     * single neighbor farthest from `node_idx` (measured by L2 distance to
+     * node_idx's own vector), deleting the edge in both directions.
+     *
+     * @param node_idx Internal index of the over-connected node to prune.
+     * @param layer The layer whose adjacency list is trimmed.
+     */
+    void prune_edge(const uint32_t node_idx, uint32_t layer);
 
     /** Number of dimensions per vector (e.g., 768). */
     size_t _dimensions;
@@ -160,7 +191,6 @@ private:
     /**
      * Contiguous storage for all vector data.
      * Vectors are stored end-to-end: [vec0_dim0, vec0_dim1, ..., vec1_dim0, ...].
-     * Node i's vector starts at offset _nodes[i].vector_offset.
      */
     std::vector<float> _flat_vectors;
 
@@ -171,12 +201,16 @@ private:
      */
     std::vector<HNSWNode> _nodes;
 
+    static constexpr uint32_t EMPTY_ROOT = UINT32_MAX;
+
     /**
      * Index (into _nodes) of the entry point node.
      * This is the node with the highest layer level, used as the
      * starting point for all searches and insertions.
      */
-    uint32_t _root = -1;
+    uint32_t _root = EMPTY_ROOT;
+
+    
 
     /**
      * For random Level Generation

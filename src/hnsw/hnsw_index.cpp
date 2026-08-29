@@ -1,5 +1,5 @@
-#include "hnsw/hnsw_index.h"
-#include "utils/distance.h"
+#include "tamdb/hnsw/hnsw_index.h"
+#include "tamdb/utils/distance.h"
 
 #include <random>
 #include <limits>
@@ -12,8 +12,6 @@
 
 namespace tamdb {
 
-
-
 HNSWIndex::HNSWIndex(uint32_t M, uint32_t ef_construction, size_t dimensions) 
     : _M(M), 
     _ef_construction(ef_construction), 
@@ -22,44 +20,103 @@ HNSWIndex::HNSWIndex(uint32_t M, uint32_t ef_construction, size_t dimensions)
     _level_dist(0.0, 1.0)
 {}
 
-void HNSWIndex::insert(uint64_t id, std::span<float> vector) {
-    if(vector.size() != _dimensions)
+void HNSWIndex::insert(uint64_t id, std::span<float> input_vector) {
+    if(input_vector.size() != _dimensions)
         throw std::invalid_argument("dimension mismatch");
     
 
-
     // find the offset and insert the new vector
-    uint32_t offset = _flat_vectors.size();
-    for(size_t i = 0; i < vector.size(); ++i) {
-        _flat_vectors.push_back(vector[i]);
+    uint32_t insert_node_idx = _nodes.size();
+    for(size_t i = 0; i < input_vector.size(); ++i) {
+        _flat_vectors.push_back(input_vector[i]);
     }
 
-    uint32_t level = random_layer();
+    uint32_t insert_node_layer = random_layer();
     std::vector<std::vector<uint32_t>> adj_list;
-        for(int i = 0; i <= level; ++i) {
+        for(int i = 0; i <= insert_node_layer; ++i) {
         adj_list.push_back(std::vector<uint32_t>{});
     }
 
-    _nodes.push_back({id, std::move(adj_list), offset});
-    // Build the node into the graph
-
-
-    uint32_t u_idx = _root;
-    uint32_t layer = _nodes[u_idx].adj_list.size() - 1;
-    while(layer > 0) {
-        uint32_t layer_min_idx = search_layer(u_idx, layer, vector);
-        --layer;
-        u_idx = layer_min_idx;
+    _nodes.push_back({id, std::move(adj_list)});
+    
+    if(_root == HNSWIndex::EMPTY_ROOT) {
+        _root = insert_node_idx;
+        return; 
     }
 
 
-    // init the root  TODO: come back to this placement
-    if(_root == -1)
-        _root = 0;
+    std::vector<CandidateNode> layer_cand_nodes = 
+                        {{_root, l2_distance(input_vector, 
+                                std::span<const float>{_flat_vectors.data() + _root * _dimensions, _dimensions})}};
+    for(int32_t curr_layer = _nodes[_root].adj_list.size() - 1; curr_layer >= 0; --curr_layer) {
+        if(curr_layer > insert_node_layer) {
+            // zoom phase
+            layer_cand_nodes = search_layer(layer_cand_nodes, 1, curr_layer, input_vector);
+        } else {
+            // connect phase
+            layer_cand_nodes = search_layer(layer_cand_nodes, _ef_construction, curr_layer, input_vector);
+            connect_layer(insert_node_idx, curr_layer, layer_cand_nodes);
+        }
+    }
+        
+    // Current node sits higher than root, so it becomes the new root.
+    if(insert_node_layer > _nodes[_root].adj_list.size() - 1) {
+        _root = insert_node_idx;
+    }
 }
 
+void HNSWIndex::connect_layer(const uint32_t insert_node_idx, const uint32_t layer, 
+                        const std::vector<CandidateNode>& possible_neighbours) {
 
-std::vector<CandidateNode> HNSWIndex::search_layer(const std::vector<uint32_t> entry_points, const uint32_t EF, 
+    uint32_t max_edges = (layer != 0) ? std::min((uint32_t)possible_neighbours.size(), _M) 
+                                : std::min((uint32_t)possible_neighbours.size(), 2 * _M);
+    for(int i = 0; i < max_edges; ++i) {
+        // Connect both nodes with each other
+        auto& v_adj_list = _nodes[possible_neighbours[i].node_idx].adj_list[layer];
+        
+        _nodes[insert_node_idx].adj_list[layer].push_back(possible_neighbours[i].node_idx);
+        v_adj_list.push_back(insert_node_idx);
+        
+
+        if((v_adj_list.size() > _M && layer != 0) || (v_adj_list.size() > 2 * _M && layer == 0)) {
+            prune_edge(possible_neighbours[i].node_idx, layer);
+        }
+    }
+}
+
+void HNSWIndex::prune_edge(const uint32_t node_idx, uint32_t layer) {
+
+    uint32_t farthest_neighbour = _nodes[node_idx].adj_list[layer][0];
+    float max_distance = l2_distance(std::span<const float>{
+                                            _flat_vectors.data() + node_idx * _dimensions,
+                                            _dimensions},
+                                    std::span<const float>{
+                                            _flat_vectors.data() + _nodes[node_idx].adj_list[layer][0] * _dimensions,
+                                            _dimensions}
+                                    ); 
+    for(auto& v_idx : _nodes[node_idx].adj_list[layer]) {
+        float dist = l2_distance(std::span<const float> {_flat_vectors.data() + node_idx * _dimensions, _dimensions},
+                                std::span<const float> {_flat_vectors.data() + v_idx * _dimensions, _dimensions});
+        
+        if(max_distance < dist) {
+            max_distance = dist;
+            farthest_neighbour = v_idx;
+        }
+    }
+
+    _nodes[node_idx].adj_list[layer].erase(std::remove(_nodes[node_idx].adj_list[layer].begin(), 
+                                                        _nodes[node_idx].adj_list[layer].end(), 
+                                                        farthest_neighbour),
+                                            _nodes[node_idx].adj_list[layer].end());
+
+    _nodes[farthest_neighbour].adj_list[layer].erase(std::remove(_nodes[farthest_neighbour].adj_list[layer].begin(), 
+                                                        _nodes[farthest_neighbour].adj_list[layer].end(), 
+                                                        node_idx),
+                                            _nodes[farthest_neighbour].adj_list[layer].end());
+
+}
+
+std::vector<CandidateNode> HNSWIndex::search_layer(const std::vector<CandidateNode> entry_points, const uint32_t EF, 
                                     const uint32_t curr_layer, std::span<const float> input_vector) {
     
     // PQ for capturing pop #ef nodes
@@ -79,7 +136,8 @@ std::vector<CandidateNode> HNSWIndex::search_layer(const std::vector<uint32_t> e
                         decltype(min_heap_cmp)> min_heap(min_heap_cmp);
 
     std::set<uint32_t> visited_nodes;
-    for(uint32_t u_idx: entry_points) {
+    for(const CandidateNode& cand_node: entry_points) {
+        uint32_t u_idx = cand_node.node_idx;
         float l2_dist = l2_distance(input_vector, 
                                     std::span<const float>{_flat_vectors.data() + u_idx * _dimensions, _dimensions});
         min_heap.push({u_idx, l2_dist});
@@ -111,7 +169,6 @@ std::vector<CandidateNode> HNSWIndex::search_layer(const std::vector<uint32_t> e
                     max_heap.push({v_idx, l2_dist});
                     if(max_heap.size() > EF)
                         max_heap.pop();
-                    
                 }
             }
         }
@@ -129,13 +186,33 @@ std::vector<CandidateNode> HNSWIndex::search_layer(const std::vector<uint32_t> e
 
 }
 
-std::vector<SearchResult> HNSWIndex::search(std::span<const float> query, size_t pop_k, size_t ef_search) {
+std::vector<SearchResult> HNSWIndex::search(std::span<const float> query_vector, size_t pop_k, size_t ef_search) {
 
+    if(_root == HNSWIndex::EMPTY_ROOT)
+        return std::vector<SearchResult>{};
+
+    std::vector<CandidateNode> layer_cand_nodes = {{_root, l2_distance(
+                                                        query_vector,
+                                                        std::span<const float>{_flat_vectors.data() + _root * _dimensions, _dimensions})}};
+    
+    // Zoom Phase Loop                                
+    for(int layer = _nodes[_root].adj_list.size() - 1; layer > 0; --layer) {
+        layer_cand_nodes = search_layer(layer_cand_nodes, 1, layer, query_vector);
+    }
+    // Search Phase - looks for the node in the layer 0
+    layer_cand_nodes = search_layer(layer_cand_nodes, ef_search, 0, query_vector);
+
+    std::vector<SearchResult> search_nodes_results;
+    size_t n = std::min(pop_k, layer_cand_nodes.size());
+    for(int i = 0; i < n; ++i) {
+        search_nodes_results.push_back({ _nodes[layer_cand_nodes[i].node_idx]._vector_id, layer_cand_nodes[i].node_dist});
+    }
+
+    return search_nodes_results;
 }
 
 
 uint32_t HNSWIndex::random_layer() {
     return std::floor( (-1) * std::log(_level_dist(_rng)) * (1 / std::log(_M)));
 }
-
 };
