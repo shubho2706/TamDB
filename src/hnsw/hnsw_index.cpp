@@ -20,7 +20,7 @@ HNSWIndex::HNSWIndex(uint32_t M, uint32_t ef_construction, size_t dimensions)
     _level_dist(0.0, 1.0)
 {}
 
-void HNSWIndex::insert(uint64_t id, std::span<float> input_vector) {
+void HNSWIndex::insert(uint64_t id, std::span<const float> input_vector) {
     if(input_vector.size() != _dimensions)
         throw std::invalid_argument("dimension mismatch");
     

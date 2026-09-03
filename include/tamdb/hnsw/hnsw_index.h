@@ -5,6 +5,7 @@
 #include <vector>
 #include <cstdint>
 #include <random>
+#include <memory>
 
 namespace tamdb {
 
@@ -82,7 +83,7 @@ public:
      * @param vector The vector data. Must have exactly `dimensions` elements.
      * @throws std::invalid_argument if vector.size() != dimensions.
      */
-    void insert(uint64_t id, std::span<float> vector);
+    void insert(uint64_t id, std::span<const float> vector);
 
     /**
      * Search for the nearest neighbors of a query vector.
@@ -219,5 +220,7 @@ private:
     std::uniform_real_distribution<double> _level_dist;
 
 };
+
+typedef std::shared_ptr<HNSWIndex> HNSWIndexPtr;
 
 } // namespace tamdb

@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package tamdb.proto;
+
+service TamDBService {
+    rpc InsertVector(InsertRequest) returns (InsertResponse);
+    rpc SearchVector(SearchRequest) returns (SearchResponse);
+}
+
+message InsertRequest {
+    uint64 id = 1;
+    repeated float input_vector = 2;
+}
+
+message InsertResponse {
+    bool ok = 1;
+    string error = 2;
+}
+
+message SearchRequest {
+    repeated float search_vector = 1;
+    uint32 top_k = 2;
+    uint32 ef_search = 3;
+}
+
+message SearchResult {
+  uint64 id = 1;
+  float score = 2;
+}
+
+message SearchResponse {
+    repeated SearchResult search_results = 1;
+}
+
+

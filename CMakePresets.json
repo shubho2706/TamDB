@@ -2,13 +2,14 @@
     "version": 3,
     "configurePresets": [
         {
-            "name": "default",
+            "name": "cd-1",
             "displayName": "Default (GCC 10)",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
                 "CMAKE_C_COMPILER": "/usr/bin/gcc10-gcc",
                 "CMAKE_CXX_COMPILER": "/usr/bin/gcc10-g++",
-                "TAMDB_BUILD_TESTS": "ON"
+                "TAMDB_BUILD_TESTS": "ON",
+                "BUILD_GRPC_LAYER": "ON"
             }
         }
     ],

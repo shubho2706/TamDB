@@ -8,22 +8,75 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(TAMDB_BUILD_TESTS "Build tests" OFF)
 option(TAMDB_BUILD_BENCHMARKS "Build benchmarks" OFF)
 
+option(BUILD_GRPC_LAYER "Build GRPC Interface" OFF)
+
+
+
 file(GLOB_RECURSE TAMDB_SOURCES CONFIGURE_DEPENDS
     src/*.cpp
     src/*/*.cpp
 )
 
-# Exclude main.cpp from library sources
+# Exclude entry points and the gRPC layer from library sources
 list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
+list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/server_main\\.cpp$")
+list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/service/")
 
 # Library
-add_library(tamdb_lib ${TAMDB_SOURCES}
-    src/hnsw/hnsw_index.cpp)
+add_library(tamdb_lib ${TAMDB_SOURCES})
 target_include_directories(tamdb_lib PUBLIC include)
 
 # Main executable
 add_executable(tamdb src/main.cpp)
 target_link_libraries(tamdb PRIVATE tamdb_lib)
+
+if(BUILD_GRPC_LAYER)
+    set(gRPC_INSTALL OFF CACHE BOOL "" FORCE)
+    set(protobuf_INSTALL OFF CACHE BOOL "" FORCE)
+    set(gRPC_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(ABSL_PROPAGATE_CXX_STD ON CACHE BOOL "" FORCE)
+    set(utf8_range_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+
+    include(FetchContent)
+    FetchContent_Declare(
+        grpc
+        GIT_REPOSITORY https://github.com/grpc/grpc.git
+        GIT_TAG v1.83.1 
+    )
+    FetchContent_MakeAvailable(grpc)
+
+    # --- generate protobuf + gRPC C++ from the .proto ---
+    set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/proto/tamdb.proto)
+    set(PROTO_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    file(MAKE_DIRECTORY ${PROTO_GEN_DIR})
+
+    set(PROTO_SRCS ${PROTO_GEN_DIR}/tamdb.pb.cc)
+    set(PROTO_HDRS ${PROTO_GEN_DIR}/tamdb.pb.h)
+    set(GRPC_SRCS  ${PROTO_GEN_DIR}/tamdb.grpc.pb.cc)
+    set(GRPC_HDRS  ${PROTO_GEN_DIR}/tamdb.grpc.pb.h)
+
+    add_custom_command(
+        OUTPUT ${PROTO_SRCS} ${PROTO_HDRS} ${GRPC_SRCS} ${GRPC_HDRS}
+        COMMAND $<TARGET_FILE:protobuf::protoc>
+        ARGS --cpp_out=${PROTO_GEN_DIR}
+             --grpc_out=${PROTO_GEN_DIR}
+             -I ${CMAKE_CURRENT_SOURCE_DIR}/proto
+             --plugin=protoc-gen-grpc=$<TARGET_FILE:grpc_cpp_plugin>
+             ${PROTO_FILE}
+        DEPENDS ${PROTO_FILE}
+        COMMENT "Generating gRPC/protobuf code from tamdb.proto")
+
+    # --- server target: entry point + service glue + generated code ---
+    file(GLOB TAMDB_SERVICE_SOURCES CONFIGURE_DEPENDS src/service/*.cpp)
+
+    add_executable(tamdb_server
+        src/server_main.cpp
+        ${TAMDB_SERVICE_SOURCES}
+        ${PROTO_SRCS} ${GRPC_SRCS})
+
+    target_include_directories(tamdb_server PRIVATE ${PROTO_GEN_DIR})
+    target_link_libraries(tamdb_server PRIVATE tamdb_lib grpc++ libprotobuf)
+endif()
 
 # Tests
 if(TAMDB_BUILD_TESTS)
