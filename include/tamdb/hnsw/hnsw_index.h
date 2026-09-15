@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <random>
 #include <memory>
+#include <shared_mutex>
 
 namespace tamdb {
 
@@ -211,14 +212,16 @@ private:
      */
     uint32_t _root = EMPTY_ROOT;
 
-    
-
     /**
      * For random Level Generation
      */
     std::mt19937 _rng;
     std::uniform_real_distribution<double> _level_dist;
 
+    /**
+     * Control multi threaded insert and search
+     */
+    std::shared_mutex _mutex;
 };
 
 typedef std::shared_ptr<HNSWIndex> HNSWIndexPtr;

@@ -8,6 +8,7 @@
 #include <vector>
 #include <queue>
 #include <span>
+#include <mutex>
 
 
 namespace tamdb {
@@ -21,6 +22,7 @@ HNSWIndex::HNSWIndex(uint32_t M, uint32_t ef_construction, size_t dimensions)
 {}
 
 void HNSWIndex::insert(uint64_t id, std::span<const float> input_vector) {
+    std::unique_lock lock(_mutex);
     if(input_vector.size() != _dimensions)
         throw std::invalid_argument("dimension mismatch");
     
@@ -118,7 +120,7 @@ void HNSWIndex::prune_edge(const uint32_t node_idx, uint32_t layer) {
 
 std::vector<CandidateNode> HNSWIndex::search_layer(const std::vector<CandidateNode> entry_points, const uint32_t EF, 
                                     const uint32_t curr_layer, std::span<const float> input_vector) {
-    
+
     // PQ for capturing pop #ef nodes
     auto max_heap_cmp = [] (const CandidateNode &a, const CandidateNode& b) {
         return a.node_dist < b.node_dist; 
@@ -188,6 +190,7 @@ std::vector<CandidateNode> HNSWIndex::search_layer(const std::vector<CandidateNo
 
 std::vector<SearchResult> HNSWIndex::search(std::span<const float> query_vector, size_t pop_k, size_t ef_search) {
 
+    std::shared_lock lock(_mutex);
     if(_root == HNSWIndex::EMPTY_ROOT)
         return std::vector<SearchResult>{};
 

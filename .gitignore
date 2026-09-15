@@ -3,3 +3,8 @@ build/
 compile_commands.json
 benchmarks/distance_bench.cpp
 .vscode/
+tamdb_wal
+samples/tamdb_pb2_grpc.py
+samples/tamdb_pb2.py
+samples/__pycache__/tamdb_pb2_grpc.cpython-37.pyc
+samples/__pycache__/tamdb_pb2.cpython-37.pyc

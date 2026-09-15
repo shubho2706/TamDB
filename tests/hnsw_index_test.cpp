@@ -8,6 +8,7 @@
 #include <span>
 #include <unordered_set>
 #include <vector>
+#include <thread>
 
 namespace tamdb {
 namespace {
@@ -210,5 +211,45 @@ TEST(HNSWIndexTest, HigherEfSearchDoesNotReduceRecall) {
     EXPECT_GE(high, low - 0.05) << "low(ef=16)=" << low << " high(ef=128)=" << high;
 }
 
+
+TEST(HNSWIndexTest, ConcurrentInsertAndSearch) {
+    constexpr size_t kDim = 16;
+    HNSWIndex index(16, 200, kDim);
+
+    // Insert a seed vector so search has something to find
+    std::vector<float> seed(kDim, 0.5f);
+    index.insert(0, seed);
+
+    // Writer thread: insert 100 vectors
+    std::thread writer([&]() {
+        std::mt19937 rng(42);
+        std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+        for (uint64_t i = 1; i <= 100; ++i) {
+            std::vector<float> v(kDim);
+            for (auto& x : v) x = dist(rng);
+            index.insert(i, v);
+        }
+    });
+
+    // Reader thread: search 100 times concurrently
+    std::thread reader([&]() {
+        std::mt19937 rng(99);
+        std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+        for (int i = 0; i < 100; ++i) {
+            std::vector<float> q(kDim);
+            for (auto& x : q) x = dist(rng);
+            auto results = index.search(q, 5, 50);
+            // Just verify no crash and results are valid
+            for (const auto& r : results) {
+                EXPECT_GE(r.score, 0.0f);
+            }
+        }
+    });
+
+    writer.join();
+    reader.join();
+
+    // No crash, no deadlock = pass
+}
 }  // namespace
 }  // namespace tamdb

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "tamdb/hnsw/hnsw_index.h"
+#include "tamdb/wal/wal.h"
 
 #include <cstdint>
 #include <span>
@@ -22,7 +23,7 @@ public:
      * @param hnswIndexPtr Shared handle to the index this service writes to.
      *        The same instance is shared with SearchService.
      */
-    IndexService(HNSWIndexPtr hnswIndexPtr);
+    IndexService(HNSWIndexPtr hnswIndexPtr, WriteAheadLoggerPtr walPtr);
 
     /**
      * Insert a vector into the shared index.
@@ -38,5 +39,6 @@ private:
 
     /** Shared index instance (also used by SearchService). */
     HNSWIndexPtr _hnswIndexPtr;
+    WriteAheadLoggerPtr _walPtr;
 };
 }
