@@ -6,5 +6,9 @@ benchmarks/distance_bench.cpp
 tamdb_wal
 samples/tamdb_pb2_grpc.py
 samples/tamdb_pb2.py
-samples/__pycache__/tamdb_pb2_grpc.cpython-37.pyc
-samples/__pycache__/tamdb_pb2.cpython-37.pyc
+samples/*.pyc
+samples/*/*.pyc
+integ_tests/tamdb_pb2_grpc.py
+integ_tests/tamdb_pb2.py
+integ_tests/*.pyc
+integ_tests/*/*.pyc

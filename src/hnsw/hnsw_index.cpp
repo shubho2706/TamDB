@@ -21,6 +21,18 @@ HNSWIndex::HNSWIndex(uint32_t M, uint32_t ef_construction, size_t dimensions)
     _level_dist(0.0, 1.0)
 {}
 
+
+HNSWIndex::HNSWIndex(IndexMetadata& index_md, std::vector<float>& flat_vectors, std::vector<HNSWNode>& nodes) 
+    : _M(index_md.m), 
+    _ef_construction(index_md.ef_construction), 
+    _dimensions(index_md.dimensions),
+    _rng(std::random_device{}()),
+    _level_dist(0.0, 1.0),
+    _root(index_md.root_entry_point),
+    _flat_vectors(flat_vectors),
+    _nodes(nodes)
+    {}
+
 void HNSWIndex::insert(uint64_t id, std::span<const float> input_vector) {
     std::unique_lock lock(_mutex);
     if(input_vector.size() != _dimensions)
@@ -217,5 +229,24 @@ std::vector<SearchResult> HNSWIndex::search(std::span<const float> query_vector,
 
 uint32_t HNSWIndex::random_layer() {
     return std::floor( (-1) * std::log(_level_dist(_rng)) * (1 / std::log(_M)));
+}
+
+IndexMetadata HNSWIndex::getIndexMetadata() {
+    return IndexMetadata {
+        .magic_number = 0x484E5357,
+        .dimensions = _dimensions,
+        .m = _M,
+        .ef_construction = _ef_construction,
+        .node_count = _nodes.size(),
+        .root_entry_point = _root
+    };
+}
+
+const std::vector<HNSWNode>& HNSWIndex::getNodes() {
+    return _nodes;
+}
+
+const std::vector<float>& HNSWIndex::getFlatVectors() {
+    return _flat_vectors;
 }
 };

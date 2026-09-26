@@ -16,6 +16,25 @@ struct CandidateNode {
 };
 
 /**
+ * Fixed-layout metadata header for segment serialization.
+ *
+ * Packed to ensure byte-exact layout on disk (no compiler padding).
+ * Written as the first bytes of a segment file; read back to
+ * reconstruct index parameters and entry point on deserialization.
+ */
+#pragma pack(push, 1)
+struct IndexMetadata {
+    uint32_t magic_number{0x484E5357};
+    uint64_t dimensions{0};
+    uint32_t m{0};
+    uint32_t ef_construction{0};
+    uint64_t node_count{0};
+    uint32_t root_entry_point{UINT32_MAX};
+
+};
+#pragma pack(pop)
+
+/**
  * A node in the HNSW graph.
  *
  * Each node represents a single vector in the index and maintains
@@ -73,6 +92,19 @@ public:
     HNSWIndex(uint32_t M, uint32_t ef_construction, size_t dimensions);
 
     /**
+     * Reconstruct an HNSW index from persisted data.
+     *
+     * Used during segment deserialization to restore a fully connected
+     * graph without replaying individual inserts.
+     *
+     * @param index_md  Metadata header (M, ef_construction, dimensions, root).
+     * @param flat_vectors  Contiguous vector storage, same layout as _flat_vectors.
+     * @param nodes  Pre-built node list with populated adjacency lists.
+     */
+    HNSWIndex(IndexMetadata& index_md, std::vector<float>& flat_vectors, 
+                std::vector<HNSWNode>& nodes);
+
+    /**
      * Insert a new vector into the index.
      *
      * Assigns the vector a random layer level, then connects it to its
@@ -103,6 +135,15 @@ public:
      *         May return fewer than top_k results if the index has fewer vectors.
      */
     std::vector<SearchResult> search(std::span<const float> query_vector, size_t top_k, size_t ef_search = 200);
+
+    /** Return a snapshot of the current index metadata for serialization. */
+    IndexMetadata getIndexMetadata();
+
+    /** Non-owning read-only view of all nodes (for serialization). */
+    const std::vector<HNSWNode>& getNodes();
+
+    /** Non-owning read-only view of the flat vector storage (for serialization). */
+    const std::vector<float>& getFlatVectors();
 
 private:
 

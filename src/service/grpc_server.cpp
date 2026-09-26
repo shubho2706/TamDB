@@ -11,7 +11,7 @@ void GRPCServer::start(const std::string& address) {
 
     HNSWIndexPtr hnswIndexPtr = std::make_shared<HNSWIndex>(16, 200, 128);
     
-    WriteAheadLoggerPtr walPtr = std::make_shared<WriteAheadLogger>("./tamdb_wal");
+    WriteAheadLoggerPtr walPtr = std::make_shared<WriteAheadLogger>("./tamdb_wal.bin");
     walPtr->replay(hnswIndexPtr);
 
     _indexServicePtr = std::make_unique<IndexService>(hnswIndexPtr, walPtr);

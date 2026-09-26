@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(TAMDB_BUILD_TESTS "Build tests" OFF)
+option(TAMDB_BUILD_TESTS "Build tests" ON)
 option(TAMDB_BUILD_BENCHMARKS "Build benchmarks" OFF)
 
 option(BUILD_GRPC_LAYER "Build GRPC Interface" OFF)
