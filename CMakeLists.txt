@@ -8,9 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(TAMDB_BUILD_TESTS "Build tests" ON)
 option(TAMDB_BUILD_BENCHMARKS "Build benchmarks" OFF)
 
-option(BUILD_GRPC_LAYER "Build GRPC Interface" OFF)
-
-
+option(BUILD_GRPC_LAYER "Build GRPC Interface" ON)
 
 file(GLOB_RECURSE TAMDB_SOURCES CONFIGURE_DEPENDS
     src/*.cpp
@@ -18,16 +16,16 @@ file(GLOB_RECURSE TAMDB_SOURCES CONFIGURE_DEPENDS
 )
 
 # Exclude entry points and the gRPC layer from library sources
-list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
-list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/server_main\\.cpp$")
-list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/service/")
+# list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
+# list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/server_main\\.cpp$")
+# list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/service/")
 
 # Library
 add_library(tamdb_lib ${TAMDB_SOURCES})
 target_include_directories(tamdb_lib PUBLIC include)
 
 # Main executable
-add_executable(tamdb src/main.cpp)
+add_executable(tamdb src/tamdb_lib_test_main.cpp)
 target_link_libraries(tamdb PRIVATE tamdb_lib)
 
 if(BUILD_GRPC_LAYER)
@@ -66,16 +64,30 @@ if(BUILD_GRPC_LAYER)
         DEPENDS ${PROTO_FILE}
         COMMENT "Generating gRPC/protobuf code from tamdb.proto")
 
-    # --- server target: entry point + service glue + generated code ---
-    file(GLOB TAMDB_SERVICE_SOURCES CONFIGURE_DEPENDS src/service/*.cpp)
+    
+    FetchContent_Declare(
+        json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.11.3
+    )
+    FetchContent_MakeAvailable(json)
 
-    add_executable(tamdb_server
-        src/server_main.cpp
+    # --- server target: entry point + service glue + generated code ---
+    file(GLOB TAMDB_SERVICE_SOURCES CONFIGURE_DEPENDS 
+        node/include/*/*.h
+        node/source/*/*.cpp
+        node/source/*/*.h
+        node/source/*.cpp)
+
+    add_executable(tamdb_node
         ${TAMDB_SERVICE_SOURCES}
         ${PROTO_SRCS} ${GRPC_SRCS})
 
-    target_include_directories(tamdb_server PRIVATE ${PROTO_GEN_DIR})
-    target_link_libraries(tamdb_server PRIVATE tamdb_lib grpc++ libprotobuf)
+    target_include_directories(tamdb_node PRIVATE 
+                ${PROTO_GEN_DIR} 
+                ${CMAKE_CURRENT_SOURCE_DIR}/node/include
+                ${CMAKE_CURRENT_SOURCE_DIR}/node/source/)
+    target_link_libraries(tamdb_node PRIVATE tamdb_lib grpc++ libprotobuf nlohmann_json::nlohmann_json)
 endif()
 
 # Tests

@@ -2,34 +2,44 @@ syntax = "proto3";
 
 package tamdb.proto;
 
-service TamDBService {
+/** gRPC service exposed by data nodes; handles direct vector storage and retrieval. */
+service DataNodeService {
     rpc InsertVector(InsertRequest) returns (InsertResponse);
     rpc SearchVector(SearchRequest) returns (SearchResponse);
 }
 
+/** gRPC service exposed by coordinator nodes; fans out requests across data nodes. */
+service CoordNodeService {
+    rpc InsertVector(InsertRequest) returns (InsertResponse);
+    rpc SearchVector(SearchRequest) returns (SearchResponse);
+}
+
+/** Request payload for inserting a single vector into the index. */
 message InsertRequest {
-    uint64 id = 1;
-    repeated float input_vector = 2;
+    uint64 id = 1;                   // Caller-assigned unique identifier for the vector.
+    repeated float input_vector = 2; // Vector data; length must match the configured dimensions.
 }
 
+/** Response payload returned after an insert operation. */
 message InsertResponse {
-    bool ok = 1;
-    string error = 2;
+    bool ok = 1;       // True if the vector was successfully inserted.
+    string error = 2;  // Human-readable error message if ok is false.
 }
 
+/** Request payload for a nearest-neighbor search. */
 message SearchRequest {
-    repeated float search_vector = 1;
-    uint32 top_k = 2;
-    uint32 ef_search = 3;
+    repeated float search_vector = 1; // Query vector; length must match the configured dimensions.
+    uint32 top_k = 2;                 // Maximum number of nearest neighbors to return.
+    uint32 ef_search = 3;             // HNSW search beam width; higher values improve recall at the cost of latency.
 }
 
+/** A single nearest-neighbor result. */
 message SearchResult {
-  uint64 id = 1;
-  float score = 2;
+  uint64 id = 1;    // Identifier of the matched vector.
+  float score = 2;  // Distance score; lower values indicate closer matches.
 }
 
+/** Response payload containing the nearest-neighbor results for a search. */
 message SearchResponse {
-    repeated SearchResult search_results = 1;
+    repeated SearchResult search_results = 1; // Ordered list of nearest neighbors, ascending by distance.
 }
-
-

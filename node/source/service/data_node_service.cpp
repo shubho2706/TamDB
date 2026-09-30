@@ -1,13 +1,12 @@
-#include "tamdb/service/grpc_adapter.h"
-
+#include "node/service/data_node_service.h"
 
 namespace tamdb {
 
-TamDBServiceImpl::TamDBServiceImpl(IndexService& index_service, SearchService& search_service) 
+DataNodeServiceImpl::DataNodeServiceImpl(IndexService& index_service, SearchService& search_service) 
                 : _index_service(index_service), _search_service(search_service)
 {}
 
-grpc::Status TamDBServiceImpl::InsertVector(grpc::ServerContext*,
+grpc::Status DataNodeServiceImpl::InsertVector(grpc::ServerContext*,
                                             const proto::InsertRequest* insert_request,
                                             proto::InsertResponse* insert_response) {
     
@@ -19,7 +18,7 @@ grpc::Status TamDBServiceImpl::InsertVector(grpc::ServerContext*,
 
 }
 
-grpc::Status TamDBServiceImpl::SearchVector(grpc::ServerContext*,
+grpc::Status DataNodeServiceImpl::SearchVector(grpc::ServerContext*,
                                             const proto::SearchRequest* search_request,
                                             proto::SearchResponse* search_response) {
 
@@ -28,9 +27,6 @@ grpc::Status TamDBServiceImpl::SearchVector(grpc::ServerContext*,
     std::vector<SearchResult> result_vectors = _search_service.searchVector(search_vec, 
                                                         search_request->top_k(), 
                                                         search_request->ef_search());
-    
-    // std::vector<tamdb.proto.SearchResult> search_response_vector;
-
 
     for(auto& sr: result_vectors) {
         proto::SearchResult* out = search_response->add_search_results();
