@@ -7,8 +7,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(TAMDB_BUILD_TESTS "Build tests" ON)
 option(TAMDB_BUILD_BENCHMARKS "Build benchmarks" OFF)
-
 option(BUILD_GRPC_LAYER "Build GRPC Interface" ON)
+option(BUILD_RAFT_LAYER "Build Raft Layer" OFF)
 
 file(GLOB_RECURSE TAMDB_SOURCES CONFIGURE_DEPENDS
     engine/src/*.cpp
@@ -27,6 +27,19 @@ target_include_directories(tamdb_lib PUBLIC engine/include)
 # Main executable
 add_executable(tamdb engine/tamdb_lib_test_main.cpp)
 target_link_libraries(tamdb PRIVATE tamdb_lib)
+
+if(BUILD_RAFT_LAYER) 
+ file(GLOB_RECURSE RAFT_SOURCES CONFIGURE_DEPENDS
+        raft/src/*.cpp
+        node/src/*/*.cpp)
+
+    add_executable(raft ${RAFT_SOURCES})
+
+    target_include_directories(raft PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}/raft/include
+                ${CMAKE_CURRENT_SOURCE_DIR}/raft/src/)
+    target_link_libraries(raft PRIVATE ) #TODO
+endif()
 
 if(BUILD_GRPC_LAYER)
     set(gRPC_INSTALL OFF CACHE BOOL "" FORCE)
