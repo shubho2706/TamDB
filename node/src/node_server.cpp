@@ -1,5 +1,5 @@
-#include "node/service/grpc_server.h"
-#include "node/constants/node_roles.h"
+#include "tamdb/service/grpc_server.h"
+#include "tamdb/constants/node_roles.h"
 
 #include <atomic>
 #include <chrono>

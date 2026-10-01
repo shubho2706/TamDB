@@ -1,4 +1,4 @@
-#include "node/service/index_service.h"
+#include "tamdb/service/index_service.h"
 #include <exception>
 
 namespace tamdb {

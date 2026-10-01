@@ -3,8 +3,8 @@
 #include "tamdb.pb.h"
 #include "tamdb.grpc.pb.h"
 
-#include "node/service/index_service.h"
-#include "node/service/search_service.h"
+#include "tamdb/service/index_service.h"
+#include "tamdb/service/search_service.h"
 
 
 namespace tamdb {

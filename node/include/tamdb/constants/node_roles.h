@@ -1,6 +1,6 @@
 #pragma once
 
-namespace tamdb{
+namespace tamdb { 
 
 /** 
 * Identifies the operational role assigned to a tamDB cluster node at startup. 

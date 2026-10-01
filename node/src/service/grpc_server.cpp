@@ -2,10 +2,10 @@
 
 #include <grpcpp/server_builder.h>
 
-#include "node/service/grpc_server.h"
+#include "tamdb/service/grpc_server.h"
 
 #include "tamdb/wal/wal.h"
-#include "node/service/coord_node_service.h"
+#include "tamdb/service/coord_node_service.h"
 #include "utils/json_utils.h"
 
 

@@ -1,9 +1,9 @@
 #pragma once
 
-#include "node/service/data_node_service.h"
-#include "node/service/coord_node_service.h"
-#include "node/constants/node_config.h"
-#include "node/constants/node_roles.h"
+#include "tamdb/service/data_node_service.h"
+#include "tamdb/service/coord_node_service.h"
+#include "tamdb/constants/node_config.h"
+#include "tamdb/constants/node_roles.h"
 
 #include <grpcpp/server.h>
 #include <string>

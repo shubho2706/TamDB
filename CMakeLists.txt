@@ -11,8 +11,8 @@ option(TAMDB_BUILD_BENCHMARKS "Build benchmarks" OFF)
 option(BUILD_GRPC_LAYER "Build GRPC Interface" ON)
 
 file(GLOB_RECURSE TAMDB_SOURCES CONFIGURE_DEPENDS
-    src/*.cpp
-    src/*/*.cpp
+    engine/src/*.cpp
+    engine/src/*/*.cpp
 )
 
 # Exclude entry points and the gRPC layer from library sources
@@ -22,10 +22,10 @@ file(GLOB_RECURSE TAMDB_SOURCES CONFIGURE_DEPENDS
 
 # Library
 add_library(tamdb_lib ${TAMDB_SOURCES})
-target_include_directories(tamdb_lib PUBLIC include)
+target_include_directories(tamdb_lib PUBLIC engine/include)
 
 # Main executable
-add_executable(tamdb src/tamdb_lib_test_main.cpp)
+add_executable(tamdb engine/tamdb_lib_test_main.cpp)
 target_link_libraries(tamdb PRIVATE tamdb_lib)
 
 if(BUILD_GRPC_LAYER)
@@ -73,11 +73,9 @@ if(BUILD_GRPC_LAYER)
     FetchContent_MakeAvailable(json)
 
     # --- server target: entry point + service glue + generated code ---
-    file(GLOB TAMDB_SERVICE_SOURCES CONFIGURE_DEPENDS 
-        node/include/*/*.h
-        node/source/*/*.cpp
-        node/source/*/*.h
-        node/source/*.cpp)
+    file(GLOB_RECURSE TAMDB_SERVICE_SOURCES CONFIGURE_DEPENDS
+        node/src/*.cpp
+        node/src/*/*.cpp)
 
     add_executable(tamdb_node
         ${TAMDB_SERVICE_SOURCES}
@@ -86,7 +84,7 @@ if(BUILD_GRPC_LAYER)
     target_include_directories(tamdb_node PRIVATE 
                 ${PROTO_GEN_DIR} 
                 ${CMAKE_CURRENT_SOURCE_DIR}/node/include
-                ${CMAKE_CURRENT_SOURCE_DIR}/node/source/)
+                ${CMAKE_CURRENT_SOURCE_DIR}/node/src/)
     target_link_libraries(tamdb_node PRIVATE tamdb_lib grpc++ libprotobuf nlohmann_json::nlohmann_json)
 endif()
 
@@ -102,7 +100,7 @@ if(TAMDB_BUILD_TESTS)
     enable_testing()
 
     file(GLOB_RECURSE TAMDB_TEST_SOURCES CONFIGURE_DEPENDS
-        tests/*.cpp
+        engine/tests/*.cpp
     )
 
     add_executable(tamdb_tests ${TAMDB_TEST_SOURCES})

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <nlohmann/json.hpp>
-#include "node/constants/node_config.h"
+#include "tamdb/constants/node_config.h"
 
 namespace tamdb {
 
