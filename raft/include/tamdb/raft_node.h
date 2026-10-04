@@ -4,41 +4,80 @@
 #include <vector>
 #include <chrono>
 #include <random>
+#include <thread>
+#include <mutex>
+#include <atomic>
 
 #include "tamdb/constants/raft_node_roles.h"
 #include "tamdb/models/raft_models.h"
+#include <condition_variable>
 
 namespace tamdb {
 
+/**
+ * Core Raft consensus state machine.
+ *
+ * Manages leader election, term tracking, and vote handling for a single
+ * shard group. One RaftNode instance per shard group the node participates in.
+ * Pure logic — no network or gRPC dependency; the node layer handles RPCs.
+ */
 class RaftNode {
 
 public:
     /**
-     * 
+     * Construct a Raft node with its ID and the IDs of all peers in the shard group.
+     * Starts as FOLLOWER with a randomized election timeout (150-300ms).
+     *
+     * @param node_id    Unique identifier for this node.
+     * @param peer_nodes IDs of all other nodes in this shard group (not including self).
      */
     RaftNode(const uint32_t node_id, const std::vector<uint32_t> peer_nodes);
 
     /**
-     * 
+     * Handle an incoming vote request from a candidate.
+     * Grants vote if: candidate's term >= ours, we haven't voted this term
+     * (or already voted for this candidate), and candidate's log is at least
+     * as up-to-date as ours. Resets election timer on vote grant.
      */
     VoteResponse handle_vote_request(const VoteRequest& vote_req);
 
     /**
-     * 
+     * Handle an incoming AppendEntries RPC from a leader.
+     * Serves as both heartbeat and log replication. Resets election timer
+     * on valid request. Rejects if leader's term is stale.
      */
     AppendEntriesResponse handle_append_entries(const AppendEntriesRequest& append_entries_req);
-
+    
+    ~RaftNode();
 
 private:
-    /**
-     * 
-     */
+    /** Reset the election timer to now + a fresh random timeout. */
     void reset_election_timer();
+
+    /** Transition to CANDIDATE, increment term, vote for self, and request votes from all peers. */
+    void start_election();
+
+    void higher_term_step_down(uint64_t term);
 
     /**
      * 
      */
-    void start_election();
+    void vote(uint32_t candidate_id);
+
+    /**
+     * 
+     */
+    void commit(uint64_t last_commit_index);
+
+    /**
+     * 
+     */
+    void initiate_election();
+
+    /**
+     * 
+     */
+    void send_vote_requests();
     
     // Node Related Fields 
     uint32_t _node_id;
@@ -53,6 +92,16 @@ private:
 
     std::chrono::milliseconds _election_timeout;
     std::chrono::steady_clock::time_point _last_heartbeat;
+
+    // Background Threads Constructs 
+    std::thread _election_thread;
+    std::mutex _election_mutex;
+    std::condition_variable _election_cond_var;
+    bool _election_timer_reset;
+    std::atomic<bool> _shutdown;
+
+    // TODO
+    std::thread commit_thread;
     
     std::vector<LogEntry> _logs;
     const static uint32_t NONE = UINT32_MAX;
