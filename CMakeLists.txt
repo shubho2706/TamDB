@@ -7,7 +7,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(TAMDB_BUILD_TESTS "Build tests" ON)
 option(TAMDB_BUILD_BENCHMARKS "Build benchmarks" OFF)
-option(BUILD_GRPC_LAYER "Build GRPC Interface" ON)
+option(BUILD_SERVICE_LAYER "Build GRPC Interface" ON)
 option(BUILD_RAFT_LAYER "Build Raft Layer" OFF)
 
 file(GLOB_RECURSE TAMDB_SOURCES CONFIGURE_DEPENDS
@@ -41,7 +41,7 @@ if(BUILD_RAFT_LAYER)
     target_link_libraries(raft PRIVATE ) #TODO
 endif()
 
-if(BUILD_GRPC_LAYER)
+if(BUILD_SERVICE_LAYER)
     set(gRPC_INSTALL OFF CACHE BOOL "" FORCE)
     set(protobuf_INSTALL OFF CACHE BOOL "" FORCE)
     set(gRPC_BUILD_TESTS OFF CACHE BOOL "" FORCE)

@@ -51,7 +51,7 @@ grpc::Status CoordinatorNodeServiceImpl::SearchVector(
     for(auto& stub: _data_node_stubs) {
         grpc::ClientContext client_context;
 
-        proto::SearchResponse node_search_res;
+        tamdb::proto::SearchResponse node_search_res;
 
         grpc::Status status = stub->SearchVector(&client_context, *search_request, &node_search_res);
         if(status.ok()) {

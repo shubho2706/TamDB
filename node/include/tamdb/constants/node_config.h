@@ -31,5 +31,9 @@ struct ClusterConfig {
     std::optional<CoordNodeConfig> coord_node_config;
 };
 
+/** Peer node addresses for a Raft shard group. Used by RaftOutboundClient to create stubs. */
+struct RaftNodeConfig {
+    std::vector<NodeAddress> peer_nodes;
+};
 
 }

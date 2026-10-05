@@ -5,7 +5,7 @@
 
 namespace tamdb {
 
-RaftNode::RaftNode(const uint32_t node_id, const std::vector<uint32_t> peer_nodes) 
+RaftNode::RaftNode(const uint32_t node_id, const std::vector<uint32_t> peer_nodes, RaftClientPtr raft_client_ptr)
             : _node_id(node_id),
             _peer_nodes(peer_nodes),
             _term(0),
@@ -16,7 +16,8 @@ RaftNode::RaftNode(const uint32_t node_id, const std::vector<uint32_t> peer_node
             _rng(std::random_device{}()),
             _rand_election_timeout(150, 300),
             _election_timer_reset(false),
-            _shutdown(false) {
+            _shutdown(false),
+            _raft_client_ptr(raft_client_ptr) {
     reset_election_timer();
     _election_thread = std::thread(&RaftNode::initiate_election, this);
 }
@@ -133,13 +134,42 @@ AppendEntriesResponse RaftNode::handle_append_entries(const AppendEntriesRequest
     return AppendEntriesResponse{_term, true};
 }
 
+void RaftNode::initiate_election() {
+    auto hold_election = [&]() {
+        return (_last_heartbeat + _election_timeout <= std::chrono::steady_clock::now());
+    };
 
-void RaftNode::commit(uint64_t last_commit_index) {
-    // TODO
+    while(! _shutdown) {
+        std::unique_lock lock(_election_mutex);
+        if(hold_election()) {
+            ++_term;
+            _node_role = RaftNodeRole::CANDIDATE;
+            _voted_for = _node_id;
+            send_vote_requests();
+            reset_election_timer();
+        } 
+
+        std::chrono::steady_clock::duration remaining_time = _last_heartbeat + _election_timeout 
+                                                            - std::chrono::steady_clock::now();
+        if(remaining_time > std::chrono::steady_clock::duration::zero()) {
+            _election_cond_var.wait_for(lock, remaining_time,
+                                         [&]() {return _election_timer_reset || _shutdown;
+                                                });
+        }
+        // CV ack's that timer was reset set it to false again
+        _election_timer_reset = false;
+    }
+}
+
+
+void RaftNode::commit(uint64_t prev_commit_index_of_node) {
+    for(uint64_t index = prev_commit_index_of_node - 1; index <= _commit_index; ++index) {
+        // TODO: Apply the Index Write operation
+    }
 }
 
 void RaftNode::send_vote_requests() {
-
+    // TODO
 }
 
 void RaftNode::vote(uint32_t candidate_id) {
@@ -162,30 +192,4 @@ void RaftNode::reset_election_timer () {
 
 }
 
-void RaftNode::initiate_election() {
-    auto hold_election = [&]() {
-        return (_last_heartbeat + _election_timeout <= std::chrono::steady_clock::now());
-    };
-
-    while(! _shutdown) {
-        std::unique_lock lock(_election_mutex);
-        if(hold_election()) {
-            ++_term;
-            _node_role = RaftNodeRole::CANDIDATE;
-            _voted_for = _node_id;
-            // TODO Send vote requests
-            reset_election_timer();
-        } 
-
-        std::chrono::steady_clock::duration remaining_time = _last_heartbeat + _election_timeout 
-                                                            - std::chrono::steady_clock::now();
-        if(remaining_time > std::chrono::steady_clock::duration::zero()) {
-            _election_cond_var.wait_for(lock, remaining_time,
-                                         [&]() {return _election_timer_reset || _shutdown;
-                                                });
-        }
-        // CV ack's that timer was reset set it to false again
-        _election_timer_reset = false;
-    }
-}
 }

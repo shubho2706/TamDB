@@ -12,3 +12,5 @@ integ_tests/tamdb_pb2_grpc.py
 integ_tests/tamdb_pb2.py
 integ_tests/*.pyc
 integ_tests/*/*.pyc
+_doc/
+ROADMAP.md
