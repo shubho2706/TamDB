@@ -9,6 +9,7 @@
                 "CMAKE_C_COMPILER": "/usr/bin/gcc10-gcc",
                 "CMAKE_CXX_COMPILER": "/usr/bin/gcc10-g++",
                 "TAMDB_BUILD_TESTS": "ON",
+                "BUILD_RAFT_LAYER": "ON",
                 "BUILD_GRPC_LAYER": "ON"
             }
         }

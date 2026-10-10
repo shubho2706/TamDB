@@ -5,42 +5,77 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-option(TAMDB_BUILD_TESTS "Build tests" ON)
-option(TAMDB_BUILD_BENCHMARKS "Build benchmarks" OFF)
-option(BUILD_SERVICE_LAYER "Build GRPC Interface" ON)
-option(BUILD_RAFT_LAYER "Build Raft Layer" OFF)
+# Set Binaries Names
+set(TAMDB_LIB "tamdb_lib")
+set(TAMDB_EXE "tamdb")
+set(TAMDB_RAFT_LIB "tamdb_raft")
+set(TAMDB_SERVICE_BIN "tamdb_service_bin")
 
+
+function(generate_proto PROTO_COMPONENT)
+    set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/proto/${PROTO_COMPONENT}.proto)
+    set(PROTO_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+    set(PROTO_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated PARENT_SCOPE)
+    
+    file(MAKE_DIRECTORY ${PROTO_GEN_DIR})
+
+    set(${PROTO_COMPONENT}_PROTO_SRCS ${PROTO_GEN_DIR}/${PROTO_COMPONENT}.pb.cc PARENT_SCOPE) # Needed in caller
+    set(PROTO_HDRS ${PROTO_GEN_DIR}/${PROTO_COMPONENT}.pb.h)
+    set(${PROTO_COMPONENT}_GRPC_SRCS ${PROTO_GEN_DIR}/${PROTO_COMPONENT}.grpc.pb.cc PARENT_SCOPE) # Needed in caller
+    set(GRPC_HDRS ${PROTO_GEN_DIR}/${PROTO_COMPONENT}.grpc.pb.h)
+
+    add_custom_command(
+        OUTPUT  ${PROTO_GEN_DIR}/${PROTO_COMPONENT}.pb.cc
+                ${PROTO_GEN_DIR}/${PROTO_COMPONENT}.pb.h
+                ${PROTO_GEN_DIR}/${PROTO_COMPONENT}.grpc.pb.cc
+                ${PROTO_GEN_DIR}/${PROTO_COMPONENT}.grpc.pb.h
+        COMMAND $<TARGET_FILE:protobuf::protoc>
+        ARGS --cpp_out=${PROTO_GEN_DIR}
+             --grpc_out=${PROTO_GEN_DIR}
+             -I ${CMAKE_CURRENT_SOURCE_DIR}/proto
+             --plugin=protoc-gen-grpc=$<TARGET_FILE:grpc_cpp_plugin>
+             ${PROTO_FILE}
+             DEPENDS ${PROTO_FILE}
+             COMMENT "Generating gRPC/protobuf code from tamdb.proto")
+endfunction()
+
+
+
+option(TAMDB_BUILD_EXE "Build TamDB Exe" OFF)
+option(BUILD_SERVICE_LAYER "Build GRPC Interface" ON)
+option(BUILD_RAFT_LAYER "Build Raft Layer" ON)
+option(TAMDB_BUILD_TESTS "Build tests" OFF)
+option(TAMDB_BUILD_BENCHMARKS "Build benchmarks" OFF)
+
+# 1. Engine Library
 file(GLOB_RECURSE TAMDB_SOURCES CONFIGURE_DEPENDS
     engine/src/*.cpp
     engine/src/*/*.cpp
 )
+add_library(${TAMDB_LIB} ${TAMDB_SOURCES})
+target_include_directories(${TAMDB_LIB} PUBLIC engine/include)
 
-# Exclude entry points and the gRPC layer from library sources
-# list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/main\\.cpp$")
-# list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/server_main\\.cpp$")
-# list(FILTER TAMDB_SOURCES EXCLUDE REGEX "src/service/")
-
-# Library
-add_library(tamdb_lib ${TAMDB_SOURCES})
-target_include_directories(tamdb_lib PUBLIC engine/include)
-
-# Main executable
-add_executable(tamdb engine/tamdb_lib_test_main.cpp)
-target_link_libraries(tamdb PRIVATE tamdb_lib)
-
-if(BUILD_RAFT_LAYER) 
- file(GLOB_RECURSE RAFT_SOURCES CONFIGURE_DEPENDS
-        raft/src/*.cpp
-        node/src/*/*.cpp)
-
-    add_executable(raft ${RAFT_SOURCES})
-
-    target_include_directories(raft PRIVATE
-                ${CMAKE_CURRENT_SOURCE_DIR}/raft/include
-                ${CMAKE_CURRENT_SOURCE_DIR}/raft/src/)
-    target_link_libraries(raft PRIVATE ) #TODO
+# 2. Main executable - for local testing 
+if(TAMDB_BUILD_EXE)
+    add_executable(${TAMDB_EXE} engine/tamdb_lib_test_main.cpp)
+    target_link_libraries(${TAMDB_EXE} PRIVATE ${TAMDB_LIB})
 endif()
 
+# 3. Build the Raft Layer
+if(BUILD_RAFT_LAYER) 
+    file(GLOB_RECURSE RAFT_SOURCES CONFIGURE_DEPENDS
+        raft/include/*/*.h
+        raft/include/*.h
+        raft/src/*.cpp)
+
+    add_library(${TAMDB_RAFT_LIB} ${RAFT_SOURCES})
+
+    target_include_directories(${TAMDB_RAFT_LIB} PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}/raft/include
+                ${CMAKE_CURRENT_SOURCE_DIR}/raft/src/)
+endif()
+
+# 4. Build the Service Interface Layer
 if(BUILD_SERVICE_LAYER)
     set(gRPC_INSTALL OFF CACHE BOOL "" FORCE)
     set(protobuf_INSTALL OFF CACHE BOOL "" FORCE)
@@ -57,26 +92,8 @@ if(BUILD_SERVICE_LAYER)
     FetchContent_MakeAvailable(grpc)
 
     # --- generate protobuf + gRPC C++ from the .proto ---
-    set(PROTO_FILE ${CMAKE_CURRENT_SOURCE_DIR}/proto/tamdb.proto)
-    set(PROTO_GEN_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
-    file(MAKE_DIRECTORY ${PROTO_GEN_DIR})
-
-    set(PROTO_SRCS ${PROTO_GEN_DIR}/tamdb.pb.cc)
-    set(PROTO_HDRS ${PROTO_GEN_DIR}/tamdb.pb.h)
-    set(GRPC_SRCS  ${PROTO_GEN_DIR}/tamdb.grpc.pb.cc)
-    set(GRPC_HDRS  ${PROTO_GEN_DIR}/tamdb.grpc.pb.h)
-
-    add_custom_command(
-        OUTPUT ${PROTO_SRCS} ${PROTO_HDRS} ${GRPC_SRCS} ${GRPC_HDRS}
-        COMMAND $<TARGET_FILE:protobuf::protoc>
-        ARGS --cpp_out=${PROTO_GEN_DIR}
-             --grpc_out=${PROTO_GEN_DIR}
-             -I ${CMAKE_CURRENT_SOURCE_DIR}/proto
-             --plugin=protoc-gen-grpc=$<TARGET_FILE:grpc_cpp_plugin>
-             ${PROTO_FILE}
-        DEPENDS ${PROTO_FILE}
-        COMMENT "Generating gRPC/protobuf code from tamdb.proto")
-
+    generate_proto(tamdb)
+    generate_proto(raft)
     
     FetchContent_Declare(
         json
@@ -90,18 +107,27 @@ if(BUILD_SERVICE_LAYER)
         node/src/*.cpp
         node/src/*/*.cpp)
 
-    add_executable(tamdb_node
-        ${TAMDB_SERVICE_SOURCES}
-        ${PROTO_SRCS} ${GRPC_SRCS})
+    add_executable(${TAMDB_SERVICE_BIN} ${TAMDB_SERVICE_SOURCES}
+                                        ${tamdb_PROTO_SRCS}
+                                        ${tamdb_GRPC_SRCS}
+                                        ${raft_PROTO_SRCS}
+                                        ${raft_GRPC_SRCS} )
+    
+    target_compile_options(${TAMDB_SERVICE_BIN} PRIVATE -Wno-deprecated-declarations -Wno-return-type)
 
-    target_include_directories(tamdb_node PRIVATE 
+    target_include_directories(${TAMDB_SERVICE_BIN} PRIVATE 
                 ${PROTO_GEN_DIR} 
-                ${CMAKE_CURRENT_SOURCE_DIR}/node/include
-                ${CMAKE_CURRENT_SOURCE_DIR}/node/src/)
-    target_link_libraries(tamdb_node PRIVATE tamdb_lib grpc++ libprotobuf nlohmann_json::nlohmann_json)
+                ${CMAKE_CURRENT_SOURCE_DIR}/node/include/)
+    target_link_libraries(${TAMDB_SERVICE_BIN} PRIVATE ${TAMDB_LIB} grpc++ 
+                            libprotobuf nlohmann_json::nlohmann_json)                
+
+    # Include the link the raft Lib
+    target_include_directories(${TAMDB_SERVICE_BIN} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/raft/include)
+    target_link_libraries(${TAMDB_SERVICE_BIN} PRIVATE ${TAMDB_RAFT_LIB})
+    
 endif()
 
-# Tests
+# 5. Build Tests Layer
 if(TAMDB_BUILD_TESTS)
     include(FetchContent)
     FetchContent_Declare(
@@ -117,12 +143,12 @@ if(TAMDB_BUILD_TESTS)
     )
 
     add_executable(tamdb_tests ${TAMDB_TEST_SOURCES})
-    target_link_libraries(tamdb_tests PRIVATE tamdb_lib GTest::gtest_main)
+    target_link_libraries(tamdb_tests PRIVATE ${TAMDB_LIB} GTest::gtest_main)
     include(GoogleTest)
     gtest_discover_tests(tamdb_tests)
 endif()
 
-# Benchmarks
+# 6. Build Benchmarks Layer
 if(TAMDB_BUILD_BENCHMARKS)
     include(FetchContent)
     FetchContent_Declare(
@@ -138,5 +164,5 @@ if(TAMDB_BUILD_BENCHMARKS)
     )
 
     add_executable(tamdb_bench ${TAMDB_BENCH_SOURCES})
-    target_link_libraries(tamdb_bench PRIVATE tamdb_lib benchmark::benchmark_main)
+    target_link_libraries(tamdb_bench PRIVATE ${TAMDB_LIB} benchmark::benchmark_main)
 endif()

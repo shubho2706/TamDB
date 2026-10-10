@@ -37,7 +37,6 @@ void HNSWIndex::insert(uint64_t id, std::span<const float> input_vector) {
     std::unique_lock lock(_mutex);
     if(input_vector.size() != _dimensions)
         throw std::invalid_argument("dimension mismatch");
-    
 
     // find the offset and insert the new vector
     uint32_t insert_node_idx = _nodes.size();

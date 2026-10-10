@@ -1,15 +1,17 @@
-#include "tamdb/service/raft_outbound_client.h"
+#include "tamdb/adapter/raft_outbound_client.h"
+
+#include <grpcpp/grpcpp.h>
+#include "raft.pb.h"
+#include "raft.grpc.pb.h"
 
 namespace tamdb {
 
-RaftOutboundClient::RaftOutboundClient(const RaftNodeConfig& raft_node_config)
-                    : _raft_node_config(raft_node_config) {
-
-    for(NodeAddress& node_addr: _raft_node_config.peer_nodes) {
+RaftOutboundClient::RaftOutboundClient(const RaftNodeConfig& raft_node_config) {
+    for(const Node& node: raft_node_config.peer_nodes) {
         // TODO:  possible to create persistant connections ?
-        auto channel = grpc::CreateChannel(node_addr.ip + ":"+ std::to_string(node_addr.port),
+        auto channel = grpc::CreateChannel(node.address.ip + ":"+ std::to_string(node.address.port),
                                             grpc::InsecureChannelCredentials());
-        auto stub = tamdb::proto::raft::RaftNodeService::NewStub(channel);
+        auto stub = tamdb::proto::raft::RaftService::NewStub(channel);
         _peer_node_stubs.push_back(std::move(stub));
     }                        
 }
@@ -60,8 +62,11 @@ std::vector<AppendEntriesResponse> RaftOutboundClient::send_append_entries(const
 
         proto_entry->set_term(entry.term);
         proto_entry->set_log_index(entry.log_index);
-        for(float val : entry.input_vector) {
-            proto_entry->add_input_vector(val);
+
+        auto* proto_datum = proto_entry->mutable_datum();
+        proto_datum->set_vector_id(entry.datum.vector_id);
+        for(float val : entry.datum.input_vector) {
+            proto_datum->add_input_vector(val);
         }
     }
 

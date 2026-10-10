@@ -5,6 +5,7 @@
 
 #include "tamdb/service/index_service.h"
 #include "tamdb/service/search_service.h"
+#include "tamdb/raft_node.h"
 
 
 namespace tamdb {
@@ -26,7 +27,8 @@ public:
      * @param search_service Non-owning reference to the read facade; must
      *        outlive this adapter.
      */
-    DataNodeServiceImpl(IndexService& index_service, SearchService& search_service);
+    DataNodeServiceImpl(IndexService& index_service, SearchService& search_service,
+    RaftNode& raft_node);
 
     /**
      * RPC handler: insert a vector.
@@ -50,6 +52,7 @@ private:
     /** Non-owning references to the logic facades (owned by GRPCServer). */
     IndexService& _index_service;
     SearchService& _search_service;
+    RaftNode& _raft_node;
 };
 
 typedef std::unique_ptr<DataNodeServiceImpl> DataNodeServicePtr;

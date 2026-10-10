@@ -1,4 +1,4 @@
-#include "tamdb/service/grpc_server.h"
+#include "tamdb/server/grpc_server.h"
 #include "tamdb/constants/node_roles.h"
 
 #include <atomic>
@@ -33,6 +33,7 @@ int main(int argc, char** argv) {
     std::string port = get_flag(argc, argv, "--port", "50051");
     std::string role_str = get_flag(argc, argv, "--roles", "common");
     std::string config_file = get_flag(argc, argv, "--config", "cluster.json");
+    std::string node_id_str = get_flag(argc, argv, "--node-id", "1");
 
     std::string address = "0.0.0.0:" + port;
     tamdb::NodeRole role = parse_role(role_str);

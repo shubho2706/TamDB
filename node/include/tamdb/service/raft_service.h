@@ -3,7 +3,9 @@
 #include "raft.pb.h"
 #include "raft.grpc.pb.h"
 
+#include <memory>
 
+#include "tamdb/raft_node.h"
 
 namespace tamdb {
 
@@ -21,7 +23,7 @@ public:
      *
      * @param raft_node_ptr Shared pointer to the RaftNode that handles consensus logic.
      */
-    RaftServiceImpl(RaftNodePtr raft_node_ptr);
+    RaftServiceImpl(RaftNode& raft_node);
 
     /**
      * Handle incoming vote request from a candidate peer.
@@ -32,8 +34,8 @@ public:
      * @return grpc::Status::OK on success.
      */
     grpc::Status RequestVote(grpc::ServerContext*, 
-                            const proto::VoteRequest* vote_request,
-                            proto::VoteResponse* vote_response) override;
+                            const tamdb::proto::raft::VoteRequest* vote_request,
+                            tamdb::proto::raft::VoteResponse* vote_response) override;
 
     /**
      * Handle incoming AppendEntries from leader.
@@ -45,12 +47,12 @@ public:
      * @return grpc::Status::OK on success.
      */
     grpc::Status AppendEntries(grpc::ServerContext*,
-                            const proto::AppendEntriesRequest* append_entries_request,
-                            proto::AppendEntriesResponse* append_entries_response) override;
+                            const tamdb::proto::raft::AppendEntriesRequest* append_entries_request,
+                            tamdb::proto::raft::AppendEntriesResponse* append_entries_response) override;
 
 private:
-    RaftNodePtr _raft_node_ptr;
-    std::vector<std::unique_ptr<tamdb::proto::RaftService::Stub>> _peer_nodes;
+    RaftNode& _raft_node;
+    std::vector<std::unique_ptr<tamdb::proto::raft::RaftService::Stub>> _peer_nodes;
 };
 }
 

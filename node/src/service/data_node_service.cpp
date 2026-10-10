@@ -2,19 +2,39 @@
 
 namespace tamdb {
 
-DataNodeServiceImpl::DataNodeServiceImpl(IndexService& index_service, SearchService& search_service) 
-                : _index_service(index_service), _search_service(search_service)
+DataNodeServiceImpl::DataNodeServiceImpl(IndexService& index_service, SearchService& search_service, 
+                                        RaftNode& raft_node) 
+                : _index_service(index_service), 
+                _search_service(search_service),
+                _raft_node(raft_node)
 {}
 
 grpc::Status DataNodeServiceImpl::InsertVector(grpc::ServerContext*,
                                             const proto::InsertRequest* insert_request,
                                             proto::InsertResponse* insert_response) {
     
-    std::span<const float> insert_vec (insert_request->input_vector().data(), 
-                                        insert_request->input_vector().size());                                         
-    bool res = _index_service.insertVector(insert_request->id(), insert_vec);
-    insert_response->set_ok(res);
-    return grpc::Status::OK;
+    // std::span<const float> insert_vec (insert_request->input_vector().data(), 
+    //                                     insert_request->input_vector().size());                                         
+    // bool res = _index_service.insertVector(insert_request->id(), insert_vec);
+    // insert_response->set_ok(res);
+    
+    std::vector<float> input_vector {insert_request->input_vector().begin(), 
+                                    insert_request->input_vector().end()};
+
+    WriteRequest write_request = {
+        insert_request->id(),
+        std::move(input_vector)
+    };
+
+    WriteResponse resp = _raft_node.handle_write_entries(write_request);
+
+    if(resp.success) {
+        insert_response->set_ok(true);
+        return grpc::Status::OK;
+    } 
+
+    return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
+                        "Not a leader. Leader is " + std::to_string(resp.leader_id));
 
 }
 

@@ -12,14 +12,19 @@ struct NodeAddress {
     std::string ip;
     uint16_t port{0};
 };
+ 
+struct Node {
+    uint64_t node_id;
+    NodeAddress address;
+};
 
 /** Configuration for a coordinator node, listing the data nodes it routes requests to. */
 struct CoordNodeConfig {
-    std::vector<NodeAddress> data_nodes;
+    std::vector<Node> data_nodes;
 };
 
 /** HNSW index construction and capacity parameters for a data node. */
-struct DataNodeConfig {
+struct VectorIndexConfig  {
     uint32_t max_connections_per_node_per_layer{16};
     uint32_t ef_construction{200};
     uint32_t dimensions{128};
@@ -27,13 +32,14 @@ struct DataNodeConfig {
 
 /** Top-level cluster configuration; carries the role-specific sub-config for the running node. */
 struct ClusterConfig {
-    std::optional<DataNodeConfig> data_node_config;
+    std::optional<VectorIndexConfig> vector_index_config;
     std::optional<CoordNodeConfig> coord_node_config;
+    uint32_t node_id;
 };
 
 /** Peer node addresses for a Raft shard group. Used by RaftOutboundClient to create stubs. */
 struct RaftNodeConfig {
-    std::vector<NodeAddress> peer_nodes;
+    std::vector<Node> peer_nodes;
 };
 
 }

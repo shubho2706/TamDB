@@ -14,8 +14,8 @@ CoordinatorNodeServiceImpl::CoordinatorNodeServiceImpl(CoordNodeConfig coord_nod
                 : _coord_node_config(coord_node_config) {
 
 
-    for(NodeAddress& node_addr: _coord_node_config.data_nodes) {
-        auto channel = grpc::CreateChannel(node_addr.ip + ":" + std::to_string(node_addr.port), 
+    for(Node& node: _coord_node_config.data_nodes) {
+        auto channel = grpc::CreateChannel(node.address.ip + ":" + std::to_string(node.address.port), 
                                         grpc::InsecureChannelCredentials());
         auto stub = tamdb::proto::DataNodeService::NewStub(channel);
         _data_node_stubs.push_back(std::move(stub));

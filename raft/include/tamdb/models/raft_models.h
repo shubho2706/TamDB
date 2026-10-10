@@ -13,11 +13,16 @@ struct VoteRequest {
     uint64_t last_log_term;
 };
 
+struct Datum {
+    uint64_t vector_id;
+    std::vector<float> input_vector;
+};
+
 /** A single entry in the Raft log — represents one replicated command. */
 struct LogEntry {
     uint64_t term;
     uint64_t log_index;
-    std::vector<float> input_vector;
+    Datum datum;
 };
 
 /** Leader's request to replicate log entries and/or send a heartbeat. */
@@ -40,6 +45,23 @@ struct VoteResponse {
 struct AppendEntriesResponse {
     uint64_t term; 
     bool success;
+};
+
+/**
+ * 
+ */
+struct WriteRequest {
+    uint64_t id;
+    std::vector<float> input_vector;
+};
+
+/**
+ * 
+ */
+struct WriteResponse {
+    bool success;
+    bool is_leader;
+    uint32_t leader_id;
 };
 
 }

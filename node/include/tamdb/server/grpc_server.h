@@ -2,6 +2,7 @@
 
 #include "tamdb/service/data_node_service.h"
 #include "tamdb/service/coord_node_service.h"
+#include "tamdb/service/raft_service.h"
 #include "tamdb/constants/node_config.h"
 #include "tamdb/constants/node_roles.h"
 
@@ -50,6 +51,8 @@ private:
      */
     void build_coord_node(grpc::ServerBuilder& builder, const ClusterConfig& config);
 
+    std::unique_ptr<RaftNode> _raft_node_ptr;
+    std::unique_ptr<RaftServiceImpl> _raft_service_ptr;
     std::unique_ptr<IndexService> _index_service_ptr;
     std::unique_ptr<SearchService> _search_service_ptr;
     DataNodeServicePtr _data_node_service_ptr;

@@ -11,7 +11,7 @@ namespace tamdb {
  * RaftNode calls these methods to send messages to peers.
  * Implementations handle the transport (gRPC, TCP, etc).
  */
-class RaftClient {
+class IRaftOutboundClient {
 
 public:
     /**
@@ -31,9 +31,9 @@ public:
     virtual std::vector<AppendEntriesResponse> send_append_entries(const AppendEntriesRequest& append_entries_req) = 0;
 
     /** Virtual destructor for proper cleanup through base pointer. */
-    virtual ~RaftClient() = default;
+    virtual ~IRaftOutboundClient() = default;
 
 };
 
-typedef std::shared_ptr<RaftClient> RaftClientPtr;
+typedef std::unique_ptr<IRaftOutboundClient> RaftOutboundClientPtr;
 }

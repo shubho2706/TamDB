@@ -5,14 +5,15 @@
 #include "tamdb/client/raft_client.h"
 #include "tamdb/models/raft_models.h"
 #include "tamdb/service/raft_service.h"
+#include "tamdb/constants/node_config.h"
 
 namespace tamdb {
 /**
- * gRPC implementation of RaftClient.
+ * gRPC implementation of RaftOutboundClient.
  * Holds stubs to all peer nodes in the shard group and forwards
  * vote requests and AppendEntries RPCs over the network.
  */
-class RaftOutboundClient : public RaftClient {
+class RaftOutboundClient : public IRaftOutboundClient {
 public: 
 
     /**
@@ -38,8 +39,12 @@ public:
      */
     std::vector<AppendEntriesResponse> send_append_entries(const AppendEntriesRequest& append_entries_req);
 
+    /**
+     * 
+     */
+    ~RaftOutboundClient() = default;
 private:
-    std::vector<std::unique_ptr<tamdb::proto::raft::RaftService>> _peer_node_stubs;
+    std::vector<std::unique_ptr<tamdb::proto::raft::RaftService::Stub>> _peer_node_stubs;
 
 };
 }
