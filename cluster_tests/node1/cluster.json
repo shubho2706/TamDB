@@ -1,0 +1,13 @@
+{
+  "node_id": 1,
+  "vector_index_config": {
+    "dimensions": 128
+  },
+  "coord_node_config": {
+    "data_nodes": [
+      {"node_id": 1, "address": {"ip": "localhost", "port": 50051}},
+      {"node_id": 2, "address": {"ip": "localhost", "port": 50052}},
+      {"node_id": 3, "address": {"ip": "localhost", "port": 50053}}
+    ]
+  }
+}

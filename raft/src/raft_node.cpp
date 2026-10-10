@@ -70,7 +70,7 @@ VoteResponse RaftNode::handle_vote_request(const VoteRequest& vote_req) {
 }
 
 AppendEntriesResponse RaftNode::handle_append_entries(const AppendEntriesRequest& append_entries_req) {    
-    
+    std::cout << "[Node " << _node_id << "] Received heartbeat from leader ###  " << std::endl;
     std::unique_lock lock(_raft_mutex);
 
     // 1: leader is outdated
@@ -196,7 +196,13 @@ void RaftNode::send_heartbeats() {
     };
     std::vector<AppendEntriesResponse> hb_responses = _raft_outbound_client_ptr->send_append_entries(append_req);
     
-    // TODO: do what with these reponses ?
+    for(AppendEntriesResponse& hp_resp : hb_responses) {
+        if(hp_resp.term > _term) {
+            // Step Down
+            higher_term_step_down(hp_resp.term);
+            break;
+        }
+    }
 }
 
 void RaftNode::commit(const uint64_t prev_commit_index_of_node) {

@@ -34,7 +34,7 @@ std::vector<VoteResponse> RaftOutboundClient::send_request_votes(const VoteReque
         grpc::Status status = stub->RequestVote(&client_context, vote_request_proto, &vote_response_proto);
 
         if(status.ok()) {
-            std::cout << "Response from stub " << vote_response_proto.DebugString() << std::endl;
+            std::cout << "RaftOutboundClient Response from stub " << vote_response_proto.DebugString() << std::endl;
             // TODO: send back the responses
             vote_responses.push_back({
                     vote_response_proto.term(),
@@ -79,14 +79,14 @@ std::vector<AppendEntriesResponse> RaftOutboundClient::send_append_entries(const
         grpc::Status status = stub->AppendEntries(&client_context, append_entries_req_proto, &append_entries_response_proto);
 
         if(status.ok()) {
-            std::cout << "Response from stub" << append_entries_response_proto.DebugString();
+            std::cout << "RaftOutboundClient Response from stub" << append_entries_response_proto.DebugString();
             // TODO: send back the responses
             append_entries_responses.push_back({
                 append_entries_response_proto.term(),
                 append_entries_response_proto.success()
             });
         } else {
-            std::cout << "Error Response from stub " << status.error_message() << std::endl;
+            std::cout << "RaftOutboundClient Error Response from stub " << status.error_message() << std::endl;
         }
     }
 

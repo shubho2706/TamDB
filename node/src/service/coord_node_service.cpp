@@ -33,9 +33,9 @@ grpc::Status CoordinatorNodeServiceImpl::InsertVector(
         grpc::ClientContext client_context;
         grpc::Status status = stub->InsertVector(&client_context, *insert_request, insert_response);
         if(status.ok()) {
-            std::cout << "Response from stub " << insert_response->DebugString() << std::endl;
+            std::cout << " COORD Response from stub " << insert_response->DebugString() << std::endl;
         } else {
-            std::cout << "Response from stub " << status.error_message() << std::endl;
+            std::cout << " COORD Response from stub " << status.error_message() << std::endl;
         }
         
     }
@@ -55,10 +55,10 @@ grpc::Status CoordinatorNodeServiceImpl::SearchVector(
 
         grpc::Status status = stub->SearchVector(&client_context, *search_request, &node_search_res);
         if(status.ok()) {
-            std::cout << "Response from stub " << search_response->DebugString() << std::endl;
+            std::cout << " COORD Response from stub " << search_response->DebugString() << std::endl;
             search_response->mutable_search_results()->MergeFrom(node_search_res.search_results());
         } else {
-            std::cout << "Response from stub " << status.error_message() << std::endl;
+            std::cout << " COORD Response from stub " << status.error_message() << std::endl;
         }
     }
 
