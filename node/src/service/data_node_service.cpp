@@ -1,5 +1,7 @@
 #include "tamdb/service/data_node_service.h"
 
+#include <iostream>
+
 namespace tamdb {
 
 DataNodeServiceImpl::DataNodeServiceImpl(IndexService& index_service, SearchService& search_service, 
@@ -12,12 +14,14 @@ DataNodeServiceImpl::DataNodeServiceImpl(IndexService& index_service, SearchServ
 grpc::Status DataNodeServiceImpl::InsertVector(grpc::ServerContext*,
                                             const proto::InsertRequest* insert_request,
                                             proto::InsertResponse* insert_response) {
-    
     // std::span<const float> insert_vec (insert_request->input_vector().data(), 
     //                                     insert_request->input_vector().size());                                         
     // bool res = _index_service.insertVector(insert_request->id(), insert_vec);
     // insert_response->set_ok(res);
     
+    std::cout << "[DataNode] InsertVector called id=" << insert_request->id()
+              << " vec_size=" << insert_request->input_vector().size() << std::endl;
+
     std::vector<float> input_vector {insert_request->input_vector().begin(), 
                                     insert_request->input_vector().end()};
 
@@ -27,6 +31,10 @@ grpc::Status DataNodeServiceImpl::InsertVector(grpc::ServerContext*,
     };
 
     WriteResponse resp = _raft_node.handle_write_entries(write_request);
+
+    std::cout << "[DataNode] WriteResponse success=" << resp.success
+              << " is_leader=" << resp.is_leader
+              << " leader_id=" << resp.leader_id << std::endl;
 
     if(resp.success) {
         insert_response->set_ok(true);

@@ -1,5 +1,7 @@
 #include "tamdb/service/raft_service.h"
 
+#include <iostream>
+
 namespace tamdb {
 RaftServiceImpl::RaftServiceImpl(RaftNode& raft_node)
             : _raft_node (raft_node) {}
@@ -24,14 +26,9 @@ grpc::Status RaftServiceImpl::RequestVote(grpc::ServerContext*,
 grpc::Status RaftServiceImpl::AppendEntries(grpc::ServerContext*,
                                             const tamdb::proto::raft::AppendEntriesRequest* append_entries_request,
                                             tamdb::proto::raft::AppendEntriesResponse* append_entries_response) {
-    tamdb::AppendEntriesRequest req = {
-        append_entries_request->leader_term(),
-        append_entries_request->leader_id(),
-        append_entries_request->prev_log_index(),
-        append_entries_request->prev_log_term(),
-        append_entries_request->leader_commit_index(),
-    };
- 
+    std::cout << "[RaftService] AppendEntries INBOUND leader_id=" << append_entries_request->leader_id()
+              << " leader_term=" << append_entries_request->leader_term()
+              << " log_count=" << append_entries_request->logs_size() << std::endl;
     std::vector<tamdb::LogEntry> logs;
     for(const tamdb::proto::raft::LogEntry& log: append_entries_request->logs()) {
         const tamdb::proto::raft::Datum& datum = log.datum();
@@ -45,7 +42,17 @@ grpc::Status RaftServiceImpl::AppendEntries(grpc::ServerContext*,
         });
     }
 
+    tamdb::AppendEntriesRequest req = {
+        append_entries_request->leader_term(),
+        append_entries_request->leader_id(),
+        append_entries_request->prev_log_index(),
+        append_entries_request->prev_log_term(),
+        append_entries_request->leader_commit_index(),
+        std::move(logs)
+    };
+ 
     tamdb::AppendEntriesResponse resp = _raft_node.handle_append_entries(req);
+    std::cout << "[RaftService] AppendEntries RESPONSE term=" << resp.term << " success=" << resp.success << std::endl;
     
     append_entries_response->set_term(resp.term);
     append_entries_response->set_success(resp.success);

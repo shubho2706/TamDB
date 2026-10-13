@@ -14,7 +14,7 @@ RaftNode::RaftNode(const uint32_t node_id, const uint32_t peer_count,
             _node_role(RaftNodeRole::FOLLOWER),
             _leader_node(RaftNode::NONE),
             _voted_for(RaftNode::NONE),
-            _commit_index(RaftNode::NONE),
+            _commit_index(0),
             _rng(std::random_device{}()),
             _rand_election_timeout(5000, 10000),
             _LEADER_HB_INTERVAL(std::chrono::milliseconds {300}),
@@ -185,6 +185,8 @@ void RaftNode::tick() {
 }
 
 void RaftNode::send_heartbeats() {
+    std::unique_lock<std::mutex> lock(_raft_mutex);
+    
     std::pair<uint64_t, uint64_t> term_index_pair = last_log_info();
     uint64_t node_last_term = term_index_pair.first;
     uint64_t node_last_log_index = term_index_pair.second;
@@ -197,7 +199,14 @@ void RaftNode::send_heartbeats() {
         _commit_index,
         {}
     };
+
+    lock.unlock(); // unlock for RPC calls 
     std::vector<AppendEntriesResponse> hb_responses = _raft_outbound_client_ptr->send_append_entries(append_req);
+    lock.lock();
+
+    if(_node_role != RaftNodeRole::LEADER) {
+        return;
+    }
     
     for(AppendEntriesResponse& hp_resp : hb_responses) {
         if(hp_resp.term > _term) {
@@ -209,7 +218,7 @@ void RaftNode::send_heartbeats() {
 }
 
 void RaftNode::commit(const uint64_t prev_commit_index_of_node) {
-    for(uint64_t index = prev_commit_index_of_node - 1; index <= _commit_index; ++index) {
+    for(uint64_t index = prev_commit_index_of_node; index < _commit_index; ++index) {
         // TODO: Err Handling while commit 
         bool res = _raft_commit_state_handler_ptr->commit(_logs[index].datum.vector_id,
                                                 _logs[index
