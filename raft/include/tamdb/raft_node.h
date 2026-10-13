@@ -10,6 +10,7 @@
 #include <condition_variable>
 
 #include "tamdb/client/raft_client.h"
+#include "tamdb/commit/commit_state.h"
 #include "tamdb/constants/raft_node_roles.h"
 #include "tamdb/models/raft_models.h"
 
@@ -33,7 +34,9 @@ public:
      * @param peer_count IDs of all other nodes in this shard group (not including self).
      * @param raft_client_ptr Shared pointer to the transport layer for sending RPCs to peers.
      */
-    RaftNode(const uint32_t node_id, const uint32_t peer_count, RaftOutboundClientPtr raft_client_ptr);
+    RaftNode(const uint32_t node_id, const uint32_t peer_count, 
+            IRaftOutboundClientPtr raft_client_ptr,
+            IRaftCommitStateHandlerPtr raft_commit_state_handler_ptr);
 
     /**
      * Handle an incoming vote request from a candidate.
@@ -57,13 +60,16 @@ public:
     AppendEntriesResponse handle_append_entries(const AppendEntriesRequest& append_entries_req);
     
     /**
-     * 
+     * Accept a client write. Appends to Raft log, replicates to followers,
+     * commits on majority ack, applies to HNSW via commit callback.
+     * Rejects if not leader — returns leader hint for redirect.
+     *
+     * @param write_request Vector ID and data to insert.
+     * @return WriteResponse with success status, leader flag, and leader ID.
      */
     WriteResponse handle_write_entries(WriteRequest& write_request);
 
-    /**
-     * 
-     */
+    /** Destructor. Signals shutdown, wakes background thread, joins it. */
     ~RaftNode();
 
 private:
@@ -96,9 +102,7 @@ private:
      */
     void tick();
 
-    /**
-     * 
-     */
+    /** Send empty AppendEntries (heartbeat) to all followers. Steps down if any responds with higher term. */
     void send_heartbeats(); 
 
     /**
@@ -107,14 +111,13 @@ private:
      */
     std::vector<VoteResponse> send_vote_requests(std::unique_lock<std::mutex>& lock);
 
-    /**
-     * 
-     */
+    /** Check if vote responses contain a majority. Uses cluster size, not response count. */
     bool received_majority_votes(const std::vector<VoteResponse>& vote_responses);
 
-    /**
-     * 
-     */
+    /** Check if AppendEntries responses contain a majority ack. */
+    bool received_majority_votes(const std::vector<AppendEntriesResponse>& append_entries_responses);
+
+    /** Returns {last_term, last_log_index} from the log tail, or {0, 0} if empty. */
     std::pair<uint64_t, uint64_t> last_log_info();
 
     
@@ -152,7 +155,8 @@ private:
     std::uniform_int_distribution<int> _rand_election_timeout;
     const std::chrono::milliseconds _LEADER_HB_INTERVAL;
 
-    RaftOutboundClientPtr _raft_outbound_client_ptr;
+    IRaftOutboundClientPtr _raft_outbound_client_ptr;
+    IRaftCommitStateHandlerPtr _raft_commit_state_handler_ptr;
 }; 
 
 typedef std::shared_ptr<RaftNode> RaftNodePtr;

@@ -5,7 +5,9 @@
 #include <iostream>
 namespace tamdb {
 
-RaftNode::RaftNode(const uint32_t node_id, const uint32_t peer_count, RaftOutboundClientPtr raft_client_ptr)
+RaftNode::RaftNode(const uint32_t node_id, const uint32_t peer_count, 
+                    IRaftOutboundClientPtr raft_client_ptr, 
+                    IRaftCommitStateHandlerPtr raft_commit_state_handler_ptr)
             : _node_id(node_id),
             _peer_count(peer_count),
             _term(0),
@@ -18,7 +20,8 @@ RaftNode::RaftNode(const uint32_t node_id, const uint32_t peer_count, RaftOutbou
             _LEADER_HB_INTERVAL(std::chrono::milliseconds {300}),
             _election_timer_reset(false),
             _shutdown(false),
-            _raft_outbound_client_ptr(std::move(raft_client_ptr)) {
+            _raft_outbound_client_ptr(std::move(raft_client_ptr)),
+            _raft_commit_state_handler_ptr(std::move(raft_commit_state_handler_ptr)) {
     reset_tick_timer();
     _election_thread = std::thread(&RaftNode::tick, this);
 }
@@ -207,7 +210,10 @@ void RaftNode::send_heartbeats() {
 
 void RaftNode::commit(const uint64_t prev_commit_index_of_node) {
     for(uint64_t index = prev_commit_index_of_node - 1; index <= _commit_index; ++index) {
-        // TODO: Apply the Index Write operation
+        // TODO: Err Handling while commit 
+        bool res = _raft_commit_state_handler_ptr->commit(_logs[index].datum.vector_id,
+                                                _logs[index
+                                                ].datum.input_vector);
     }
 }
 
@@ -227,6 +233,16 @@ bool RaftNode::received_majority_votes(const std::vector<VoteResponse>& vote_res
     uint32_t in_favour = 1, total = 1 + _peer_count; // register self vote
     for(const VoteResponse& vote_res: vote_responses) {
         if(vote_res.vote) ++in_favour;
+    }
+
+    int majority = (total / 2) + 1;
+    return in_favour >= majority;
+}
+
+bool RaftNode::received_majority_votes(const std::vector<AppendEntriesResponse>& append_entries_responses) {
+    uint32_t in_favour = 1, total = 1 + _peer_count; // register self vote
+    for(const AppendEntriesResponse& vote_res: append_entries_responses) {
+        if(vote_res.success) ++in_favour;
     }
 
     int majority = (total / 2) + 1;
@@ -268,8 +284,9 @@ WriteResponse RaftNode::handle_write_entries(WriteRequest& write_request) {
         // reject writes since node is not leader
         return {false, false, _leader_node};
     }
-
-    uint64_t last_log_index = (_logs.empty()) ? 0: _logs.back().log_index;
+    
+    std::pair<uint64_t, uint64_t> term_index_pair = last_log_info();
+    uint64_t last_log_index = term_index_pair.second;
     LogEntry log_entry = {  _term,
                             1 + last_log_index,
                             {   
@@ -278,9 +295,34 @@ WriteResponse RaftNode::handle_write_entries(WriteRequest& write_request) {
                             }
                         };
     _logs.push_back(std::move(log_entry));
+                    
+    // TODO: Append Entries in parallel
+    uint64_t last_log_term = term_index_pair.first;
+    AppendEntriesRequest append_entries_req = {
+        _term,
+        _node_id,
+        last_log_index,
+        last_log_term,
+        _commit_index,
+        std::vector<LogEntry>{_logs.back()}
+    };
 
-    // TODO: Append Entries to Followers
-    return {true, true, _leader_node};
-    
+    lock.unlock(); // Unlock before making Network Calls
+    std::vector<AppendEntriesResponse> append_entries_responses 
+                        = _raft_outbound_client_ptr->send_append_entries(append_entries_req);
+
+    lock.lock();
+    if (_node_role != RaftNodeRole::LEADER) {
+      return {false, false, _leader_node};
+    }
+    if(received_majority_votes(append_entries_responses)) {
+        // Commit
+        uint64_t last_commit_index = _commit_index;
+        _commit_index = _logs.back().log_index;
+        commit(last_commit_index);
+        return {true, true, _leader_node};
+    } else {
+        return {false, true, _leader_node};
+    }    
 }
 }

@@ -35,5 +35,5 @@ public:
 
 };
 
-typedef std::unique_ptr<IRaftOutboundClient> RaftOutboundClientPtr;
+typedef std::unique_ptr<IRaftOutboundClient> IRaftOutboundClientPtr;
 }

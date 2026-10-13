@@ -3,10 +3,12 @@
 #include <grpcpp/server_builder.h>
 
 #include "tamdb/server/grpc_server.h"
-#include "tamdb/wal/wal.h"
 #include "tamdb/service/coord_node_service.h"
-#include "tamdb/utils/json_utils.h"
 #include "tamdb/adapter/raft_outbound_client.h"
+#include "tamdb/adapter/raft_commit_handler.h"
+#include "tamdb/wal/wal.h"
+#include "tamdb/utils/json_utils.h"
+
 
 namespace tamdb {
 
@@ -75,10 +77,13 @@ void GRPCServer::build_data_node(grpc::ServerBuilder& builder, const ClusterConf
     RaftNodeConfig raft_node_conf = { 
         std::move(peers)
     };
-    RaftOutboundClientPtr raft_client = std::make_unique<RaftOutboundClient>(raft_node_conf);    
+    IRaftOutboundClientPtr raft_client = std::make_unique<RaftOutboundClient>(raft_node_conf); 
+    IRaftCommitStateHandlerPtr raft_commit_handler = std::make_unique<CommitStateHandler>(*_index_service_ptr);
+
     _raft_node_ptr = std::make_unique<RaftNode>(config.node_id, 
                                                 peer_count,
-                                                std::move(raft_client));
+                                                std::move(raft_client),
+                                                std::move(raft_commit_handler));
 
     _raft_service_ptr = std::make_unique<RaftServiceImpl>(*_raft_node_ptr);
     _data_node_service_ptr = std::make_unique<DataNodeServiceImpl>(*_index_service_ptr, 

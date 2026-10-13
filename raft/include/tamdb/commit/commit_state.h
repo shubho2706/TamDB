@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <memory>
 #include <cstdint>
 
 namespace tamdb {
@@ -9,7 +10,7 @@ namespace tamdb {
  * Implementations handle how committed data is persisted to the engine.
  * Lives in raft/ to keep the consensus layer engine-agnostic.
  */
-class ICommitState {
+class IRaftCommitStateHandler {
 public: 
     /**
      * Apply a committed entry to the underlying engine.
@@ -21,6 +22,8 @@ public:
     virtual bool commit(uint64_t id, const std::vector<float>& input_vector) = 0;
 
     /** Virtual destructor for proper cleanup through base pointer. */
-    ~ICommitState() = default;
+    virtual ~IRaftCommitStateHandler() = default;
 };
+
+typedef std::unique_ptr<IRaftCommitStateHandler> IRaftCommitStateHandlerPtr;
 }

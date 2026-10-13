@@ -13,6 +13,7 @@ struct VoteRequest {
     uint64_t last_log_term;
 };
 
+/** Vector payload carried in a Raft log entry — external ID + raw float data. */
 struct Datum {
     uint64_t vector_id;
     std::vector<float> input_vector;
@@ -47,17 +48,13 @@ struct AppendEntriesResponse {
     bool success;
 };
 
-/**
- * 
- */
+/** Client write request — vector ID and data to be replicated via Raft. */
 struct WriteRequest {
     uint64_t id;
     std::vector<float> input_vector;
 };
 
-/**
- * 
- */
+/** Response to a write request — indicates success, leader status, and leader hint for redirect. */
 struct WriteResponse {
     bool success;
     bool is_leader;

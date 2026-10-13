@@ -5,7 +5,7 @@
 
 namespace tamdb {
 
-class CommitStateHandler : public ICommitState {
+class CommitStateHandler : public IRaftCommitStateHandler {
 public: 
     
     /**
@@ -15,7 +15,7 @@ public:
      */
     CommitStateHandler(IndexService& index_service);
 
-    /**
+    /** 
      * Apply a committed Raft entry by inserting the vector into the HNSW index.
      *
      * @param id           External vector ID.

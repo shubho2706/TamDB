@@ -14,3 +14,5 @@ integ_tests/*.pyc
 integ_tests/*/*.pyc
 _doc/
 ROADMAP.md
+cluster_tests/*/tamdb_wal.bin
+tamdb_wal.bin
