@@ -41,6 +41,7 @@ grpc::Status DataNodeServiceImpl::InsertVector(grpc::ServerContext*,
         return grpc::Status::OK;
     } 
 
+    insert_response->set_leader_id(resp.leader_id);
     return grpc::Status(grpc::StatusCode::FAILED_PRECONDITION,
                         "Not a leader. Leader is " + std::to_string(resp.leader_id));
 

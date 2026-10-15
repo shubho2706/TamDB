@@ -24,6 +24,7 @@ message InsertRequest {
 message InsertResponse {
     bool ok = 1;       // True if the vector was successfully inserted.
     string error = 2;  // Human-readable error message if ok is false.
+    uint32 leader_id = 3;
 }
 
 /** Request payload for a nearest-neighbor search. */

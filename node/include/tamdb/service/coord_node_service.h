@@ -4,6 +4,8 @@
 #include "tamdb.grpc.pb.h"
 
 #include <vector>
+#include <unordered_map>
+
 #include "tamdb/constants/node_config.h"
 
 namespace tamdb {
@@ -43,8 +45,14 @@ public:
 
 
 private: 
+    grpc::Status insert_vector_helper(
+                                const proto::InsertRequest* insert_req, 
+                                proto::InsertResponse* insert_res,
+                                tamdb::proto::DataNodeService::Stub& stub
+                            );
+    
     CoordNodeConfig _coord_node_config;
-    std::vector<std::unique_ptr<tamdb::proto::DataNodeService::Stub>> _data_node_stubs;
+    std::unordered_map<uint32_t, std::unique_ptr<tamdb::proto::DataNodeService::Stub>> _node_to_stub_map;
 };
 
 typedef std::unique_ptr<CoordinatorNodeServiceImpl> CoordNodeServicePtr;
