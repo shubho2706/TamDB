@@ -146,6 +146,15 @@ if(TAMDB_BUILD_TESTS)
     target_link_libraries(tamdb_tests PRIVATE ${TAMDB_LIB} GTest::gtest_main)
     include(GoogleTest)
     gtest_discover_tests(tamdb_tests)
+
+    file(GLOB_RECURSE TAMDB_RAFT_TEST_SOURCES CONFIGURE_DEPENDS
+        raft/tests/*.cpp
+    )
+
+    add_executable(tamdb_raft_tests ${TAMDB_RAFT_TEST_SOURCES})
+    target_include_directories(tamdb_raft_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/raft/include)
+    target_link_libraries(tamdb_raft_tests PRIVATE ${TAMDB_RAFT_LIB} GTest::gtest_main)
+    gtest_discover_tests(tamdb_raft_tests)
 endif()
 
 # 6. Build Benchmarks Layer
