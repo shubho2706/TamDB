@@ -182,5 +182,110 @@ TEST_F(PersistTest, WriteAndReadEmptyIndex) {
     }
 }
 
+
+// --- Overwrite and metadata ---
+
+TEST_F(PersistTest, OverwriteExistingFile) {
+    // First write
+    {
+        HNSWIndexPtr index = std::make_shared<HNSWIndex>(16, 200, 4);
+        index->insert(1, std::vector<float>{1.0f, 0.0f, 0.0f, 0.0f});
+        Persist persist(segment_path);
+        EXPECT_TRUE(persist.write(index));
+    }
+
+    // Overwrite with a different index at the same path
+    {
+        HNSWIndexPtr index = std::make_shared<HNSWIndex>(16, 200, 4);
+        index->insert(99, std::vector<float>{9.0f, 0.0f, 0.0f, 0.0f});
+        Persist persist(segment_path);
+        EXPECT_TRUE(persist.write(index));
+    }
+
+    // Read back — must reflect the second write only
+    {
+        HNSWIndexPtr loaded;
+        Persist persist(segment_path);
+        EXPECT_TRUE(persist.read(loaded));
+        ASSERT_NE(loaded, nullptr);
+
+        std::vector<float> query = {9.0f, 0.0f, 0.0f, 0.0f};
+        auto results = loaded->search(query, 1);
+        ASSERT_EQ(results.size(), 1u);
+        EXPECT_EQ(results[0].id, 99u);
+    }
+}
+
+TEST_F(PersistTest, MetadataRoundTrip) {
+    constexpr size_t   kDim = 8;
+    constexpr uint32_t kM   = 16;
+    constexpr uint32_t kEf  = 200;
+    constexpr uint64_t kN   = 10;
+
+    {
+        HNSWIndexPtr index = std::make_shared<HNSWIndex>(kM, kEf, kDim);
+        std::mt19937 rng(7);
+        std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+        for (uint64_t i = 0; i < kN; ++i) {
+            std::vector<float> v(kDim);
+            for (float& x : v) x = dist(rng);
+            index->insert(i, v);
+        }
+        Persist persist(segment_path);
+        EXPECT_TRUE(persist.write(index));
+    }
+
+    {
+        HNSWIndexPtr loaded;
+        Persist persist(segment_path);
+        EXPECT_TRUE(persist.read(loaded));
+        ASSERT_NE(loaded, nullptr);
+
+        IndexMetadata md = loaded->getIndexMetadata();
+        EXPECT_EQ(md.dimensions,      static_cast<uint64_t>(kDim));
+        EXPECT_EQ(md.m,               kM);
+        EXPECT_EQ(md.ef_construction, kEf);
+        EXPECT_EQ(md.node_count,      kN);
+    }
+}
+
+// --- Large index ---
+
+TEST_F(PersistTest, LargeIndex) {
+    constexpr size_t kDim  = 32;
+    constexpr size_t kN    = 500;
+    constexpr size_t kTopK = 10;
+
+    std::mt19937 rng(99);
+    std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+
+    {
+        HNSWIndexPtr index = std::make_shared<HNSWIndex>(16, 200, kDim);
+        for (uint64_t i = 0; i < kN; ++i) {
+            std::vector<float> v(kDim);
+            for (float& x : v) x = dist(rng);
+            index->insert(i, v);
+        }
+        Persist persist(segment_path);
+        EXPECT_TRUE(persist.write(index));
+    }
+
+    {
+        HNSWIndexPtr loaded;
+        Persist persist(segment_path);
+        EXPECT_TRUE(persist.read(loaded));
+        ASSERT_NE(loaded, nullptr);
+
+        std::vector<float> query(kDim);
+        for (float& x : query) x = dist(rng);
+        auto results = loaded->search(query, kTopK);
+        ASSERT_EQ(results.size(), kTopK);
+        for (const auto& r : results) {
+            EXPECT_GE(r.score, 0.0f);
+            EXPECT_LT(r.id, static_cast<uint64_t>(kN));
+        }
+    }
+}
+
 }  // namespace
 }  // namespace tamdb

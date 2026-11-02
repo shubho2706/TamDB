@@ -6,6 +6,8 @@
 #include <vector>
 #include <algorithm>
 #include <stdexcept>
+#include <cstdint>
+#include <thread>
 
 namespace tamdb {
 namespace {
@@ -256,6 +258,119 @@ TEST(FlatIndexTest, SearchHighDimensional) {
 
     ASSERT_EQ(results.size(), 1u);
     EXPECT_EQ(results[0].id, 3u);  // closest to 3.0 in all dimensions
+}
+
+// ============================================================================
+// Search Tests - Error Handling
+// ============================================================================
+
+TEST(FlatIndexTest, DISABLED_SearchQueryDimensionMismatchThrows_BUG_NoGuard) {
+    FlatIndex index(3);
+    std::vector<float> vec = {1.0f, 2.0f, 3.0f};
+    index.insert(1, vec);
+    std::vector<float> wrong_query = {1.0f, 2.0f};  // 2 dimensions, expected 3
+    EXPECT_THROW(index.search(wrong_query, 1), std::invalid_argument);
+}
+
+// ============================================================================
+// Insert Tests - Boundary IDs
+// ============================================================================
+
+TEST(FlatIndexTest, InsertIdZero) {
+    FlatIndex index(2);
+    std::vector<float> vec = {1.0f, 2.0f};
+    index.insert(0, vec);
+    EXPECT_EQ(index.size(), 1u);
+
+    std::vector<float> query = {1.0f, 2.0f};
+    auto results = index.search(query, 1);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_EQ(results[0].id, 0u);
+    EXPECT_FLOAT_EQ(results[0].score, 0.0f);
+}
+
+TEST(FlatIndexTest, InsertMaxId) {
+    FlatIndex index(2);
+    const uint64_t max_id = std::numeric_limits<uint64_t>::max();
+    std::vector<float> vec = {3.0f, 4.0f};
+    index.insert(max_id, vec);
+    EXPECT_EQ(index.size(), 1u);
+
+    std::vector<float> query = {3.0f, 4.0f};
+    auto results = index.search(query, 1);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_EQ(results[0].id, max_id);
+    EXPECT_FLOAT_EQ(results[0].score, 0.0f);
+}
+
+// ============================================================================
+// Concurrency Tests
+// ============================================================================
+
+TEST(FlatIndexTest, ConcurrentReads) {
+    const size_t dim = 4;
+    const size_t num_vectors = 100;
+    FlatIndex index(dim);
+
+    for (uint64_t i = 0; i < num_vectors; ++i) {
+        std::vector<float> v(dim, static_cast<float>(i));
+        index.insert(i, v);
+    }
+    ASSERT_EQ(index.size(), num_vectors);
+
+    // Query vector closest to id=50 (all components = 50.0)
+    std::vector<float> query(dim, 50.0f);
+    const int num_threads = 4;
+    std::vector<std::thread> threads;
+    std::vector<bool> success(num_threads, false);
+
+    for (int t = 0; t < num_threads; ++t) {
+        threads.emplace_back([&index, &query, &success, t]() {
+            auto results = index.search(query, 1);
+            if (results.size() == 1u && results[0].id == 50u) {
+                success[t] = true;
+            }
+        });
+    }
+    for (auto& th : threads) {
+        th.join();
+    }
+
+    for (int t = 0; t < num_threads; ++t) {
+        EXPECT_TRUE(success[t]) << "Thread " << t << " got incorrect result";
+    }
+}
+
+// ============================================================================
+// Search Tests - Single Element / Large TopK
+// ============================================================================
+
+TEST(FlatIndexTest, SearchSingleElement) {
+    FlatIndex index(3);
+    std::vector<float> vec = {1.0f, 0.0f, 0.0f};
+    index.insert(7, vec);
+
+    std::vector<float> query = {2.0f, 0.0f, 0.0f};
+    auto results = index.search(query, 1);
+
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_EQ(results[0].id, 7u);
+    EXPECT_FLOAT_EQ(results[0].score, 1.0f);  // L2: sqrt((2-1)^2) = 1
+}
+
+TEST(FlatIndexTest, LargeTopK) {
+    FlatIndex index(2);
+    index.insert(1, std::vector<float>{1.0f, 0.0f});
+    index.insert(2, std::vector<float>{2.0f, 0.0f});
+    index.insert(3, std::vector<float>{3.0f, 0.0f});
+    index.insert(4, std::vector<float>{4.0f, 0.0f});
+    index.insert(5, std::vector<float>{5.0f, 0.0f});
+
+    std::vector<float> query = {0.0f, 0.0f};
+    auto results = index.search(query, 10000);  // top_k >> size
+
+    // Should return all 5 elements when top_k exceeds index size
+    ASSERT_EQ(results.size(), 5u);
 }
 
 }  // namespace

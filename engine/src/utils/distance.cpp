@@ -7,6 +7,7 @@ namespace tamdb {
 float cosine_similarity(std::span<const float> a, std::span<const float> b) {
     double dot = 0.0, norm_a = 0.0, norm_b = 0.0;
 
+    // TODO(bug): No size guard — undefined behavior if a.size() != b.size(). Add assert or throw. — 
     for(size_t i = 0; i < a.size(); ++i) {
         dot += a[i] * b[i];
         norm_a += a[i] * a[i];
@@ -22,6 +23,7 @@ float cosine_similarity(std::span<const float> a, std::span<const float> b) {
 
 float l2_distance(std::span<const float> a, std::span<const float> b) {
     double dist = 0.0;
+    // TODO(bug): No size guard — undefined behavior if a.size() != b.size(). Add assert or throw. — 
     for(size_t i = 0; i < a.size(); ++i) {
         dist += (a[i] - b[i]) * (a[i] - b[i]);
     }
@@ -31,6 +33,7 @@ float l2_distance(std::span<const float> a, std::span<const float> b) {
 
 float dot_product(std::span<const float> a, std::span<const float> b) {
     double dot = 0.0;
+    // TODO(bug): No size guard — undefined behavior if a.size() != b.size(). Add assert or throw. — 
     for(size_t i = 0; i < a.size(); ++i) {
         dot += a[i] * b[i];
     }

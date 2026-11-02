@@ -175,5 +175,74 @@ TEST(CosineSimilarityTest, RangeIsBetweenNegativeOneAndOne) {
     EXPECT_LE(result, 1.0f);
 }
 
+// === Additional Edge Case and Stress Tests ===
+
+TEST(DotProductTest, Symmetry) {
+    std::vector<float> a = {1.0f, 3.0f, -2.0f};
+    std::vector<float> b = {4.0f, -1.0f, 5.0f};
+    EXPECT_FLOAT_EQ(dot_product(a, b), dot_product(b, a));
+}
+
+TEST(DotProductTest, EmptyVectors) {
+    std::vector<float> a;
+    std::vector<float> b;
+    float result = dot_product(a, b);
+    EXPECT_FLOAT_EQ(result, 0.0f);
+}
+
+TEST(L2DistanceTest, EmptyVectors) {
+    std::vector<float> a;
+    std::vector<float> b;
+    float result = l2_distance(a, b);
+    EXPECT_FLOAT_EQ(result, 0.0f);
+}
+
+TEST(L2DistanceTest, HighDimensional) {
+    const size_t dim = 256;
+    std::vector<float> a(dim), b(dim);
+    for (size_t i = 0; i < dim; ++i) {
+        a[i] = static_cast<float>(i) * 0.1f;
+        b[i] = static_cast<float>(i) * 0.1f + 1.0f;
+    }
+    float result = l2_distance(a, b);
+    EXPECT_GT(result, 0.0f);
+}
+
+TEST(CosineSimilarityTest, HighDimensional) {
+    const size_t dim = 256;
+    std::vector<float> a(dim), b(dim);
+    for (size_t i = 0; i < dim; ++i) {
+        a[i] = static_cast<float>(i % 13 + 1);
+        b[i] = static_cast<float>((i * 7 + 3) % 17 + 1);
+    }
+    float result = cosine_similarity(a, b);
+    EXPECT_GE(result, -1.0f);
+    EXPECT_LE(result, 1.0f);
+}
+
+TEST(DotProductTest, LargeMagnitude) {
+    std::vector<float> a = {1e6f, 1e6f, 1e6f};
+    std::vector<float> b = {1e6f, 1e6f, 1e6f};
+    float result = dot_product(a, b);
+    EXPECT_FALSE(std::isnan(result));
+    EXPECT_FALSE(std::isinf(result));
+}
+
+TEST(L2DistanceTest, AllNegativeValues) {
+    std::vector<float> a = {-3.0f, -4.0f, -5.0f};
+    std::vector<float> b = {-6.0f, -8.0f, -10.0f};
+    float result = l2_distance(a, b);
+    // sqrt((3)^2 + (4)^2 + (5)^2) = sqrt(9+16+25) = sqrt(50)
+    EXPECT_NEAR(result, std::sqrt(9.0f + 16.0f + 25.0f), 1e-6f);
+}
+
+TEST(CosineSimilarityTest, NearlyParallelVectors) {
+    // slight perturbation from a unit vector should yield cosine close to 1
+    std::vector<float> a = {1.0f, 0.0f, 0.0f};
+    std::vector<float> b = {1.0f, 1e-4f, 0.0f};
+    float result = cosine_similarity(a, b);
+    EXPECT_NEAR(result, 1.0f, 1e-3f);
+}
+
 }  // namespace
 }  // namespace tamdb

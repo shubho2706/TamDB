@@ -7,6 +7,8 @@
 #include <filesystem>
 #include <vector>
 #include <span>
+#include <thread>
+#include <mutex>
 
 namespace tamdb {
 namespace {
@@ -163,6 +165,102 @@ TEST_F(WALTest, FileSizeMatchesExpected) {
     // Each entry: 4 (size) + 8 (id) + 16 (4 floats) = 28 bytes
     auto file_size = std::filesystem::file_size(wal_path);
     EXPECT_EQ(file_size, 2 * 28u);
+}
+
+
+// --- Concurrent and advanced replay ---
+
+TEST_F(WALTest, ConcurrentWrites) {
+    constexpr int kThreads   = 4;
+    constexpr int kPerThread = 25;
+
+    {
+        std::mutex wal_mutex;
+        WriteAheadLogger wal(wal_path);
+        std::vector<std::thread> threads;
+        threads.reserve(kThreads);
+
+        for (int t = 0; t < kThreads; ++t) {
+            threads.emplace_back([&wal, &wal_mutex, t]() {
+                for (int i = 0; i < kPerThread; ++i) {
+                    uint64_t id = static_cast<uint64_t>(t * kPerThread + i);
+                    std::vector<float> vec = {float(id), 0.0f, 0.0f, 0.0f};
+                    std::lock_guard<std::mutex> lock(wal_mutex);
+                    wal.write(id, vec);
+                }
+            });
+        }
+        for (auto& th : threads) th.join();
+    } // WAL destroyed, fd closed
+
+    auto index = make_index();
+    WriteAheadLogger wal(wal_path);
+    EXPECT_TRUE(wal.replay(index));
+
+    IndexMetadata md = index->getIndexMetadata();
+    EXPECT_EQ(md.node_count, static_cast<uint64_t>(kThreads * kPerThread));
+}
+
+TEST_F(WALTest, VariableDimensionEntries) {
+    // Verifies that the WAL size field correctly records floats per entry
+    {
+        WriteAheadLogger wal(wal_path);
+        wal.write(1, std::vector<float>{1.0f, 0.0f, 0.0f, 0.0f});
+        wal.write(2, std::vector<float>{0.0f, 1.0f, 0.0f, 0.0f});
+        wal.write(3, std::vector<float>{0.0f, 0.0f, 1.0f, 0.0f});
+    }
+
+    auto index = make_index(4);
+    WriteAheadLogger wal(wal_path);
+    EXPECT_TRUE(wal.replay(index));
+
+    std::vector<float> query = {1.0f, 0.0f, 0.0f, 0.0f};
+    auto results = index->search(query, 1);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_EQ(results[0].id, 1u);
+    EXPECT_NEAR(results[0].score, 0.0f, 1e-5f);
+}
+
+TEST_F(WALTest, ReplayIntoNonEmptyIndex) {
+    // Write 3 WAL entries
+    {
+        WriteAheadLogger wal(wal_path);
+        wal.write(4, std::vector<float>{4.0f, 0.0f, 0.0f, 0.0f});
+        wal.write(5, std::vector<float>{5.0f, 0.0f, 0.0f, 0.0f});
+        wal.write(6, std::vector<float>{6.0f, 0.0f, 0.0f, 0.0f});
+    }
+
+    // Index already contains 3 directly inserted vectors
+    auto index = make_index();
+    index->insert(1, std::vector<float>{1.0f, 0.0f, 0.0f, 0.0f});
+    index->insert(2, std::vector<float>{2.0f, 0.0f, 0.0f, 0.0f});
+    index->insert(3, std::vector<float>{3.0f, 0.0f, 0.0f, 0.0f});
+
+    WriteAheadLogger wal(wal_path);
+    EXPECT_TRUE(wal.replay(index));
+
+    // Index should now hold all 6 vectors
+    IndexMetadata md = index->getIndexMetadata();
+    EXPECT_EQ(md.node_count, 6u);
+}
+
+TEST_F(WALTest, LargeWAL) {
+    constexpr size_t kN = 1000;
+
+    {
+        WriteAheadLogger wal(wal_path);
+        for (uint64_t i = 0; i < kN; ++i) {
+            std::vector<float> vec = {float(i), 0.0f, 0.0f, 0.0f};
+            wal.write(i, vec);
+        }
+    }
+
+    auto index = make_index();
+    WriteAheadLogger wal(wal_path);
+    EXPECT_TRUE(wal.replay(index));
+
+    IndexMetadata md = index->getIndexMetadata();
+    EXPECT_EQ(md.node_count, kN);
 }
 
 }  // namespace

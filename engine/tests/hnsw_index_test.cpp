@@ -251,5 +251,226 @@ TEST(HNSWIndexTest, ConcurrentInsertAndSearch) {
 
     // No crash, no deadlock = pass
 }
+
+// ============================================================================
+// Edge-case: k=0
+// ============================================================================
+
+TEST(HNSWIndexTest, SearchKZeroReturnsEmpty) {
+    HNSWIndex index(16, 200, 4);
+    std::vector<float> query = {1.0f, 2.0f, 3.0f, 4.0f};
+    auto results = index.search(query, 0, 50);
+    EXPECT_TRUE(results.empty());
+}
+
+// ============================================================================
+// Edge-case: ef_search smaller than k
+// ============================================================================
+
+TEST(HNSWIndexTest, EfSearchSmallerThanK) {
+    constexpr size_t kDim = 4;
+    HNSWIndex index(16, 200, kDim);
+    std::mt19937 rng(1111);
+    for (uint64_t i = 0; i < 20; ++i) {
+        std::vector<float> v = random_vector(rng, kDim);
+        index.insert(i, v);
+    }
+    std::vector<float> query = random_vector(rng, kDim);
+    // ef_search=1 < k=10: should not crash and return at least 1 result
+    auto results = index.search(query, 10, 1);
+    EXPECT_GE(results.size(), 1u);
+}
+
+// ============================================================================
+// Single insert: search must find the inserted vector
+// ============================================================================
+
+TEST(HNSWIndexTest, SingleInsertSearchFindsIt) {
+    HNSWIndex index(16, 200, 3);
+    std::vector<float> v = {0.1f, 0.2f, 0.3f};
+    index.insert(7, v);
+
+    auto results = index.search(v, 1, 50);
+    ASSERT_EQ(results.size(), 1u);
+    EXPECT_EQ(results[0].id, 7u);
+    EXPECT_NEAR(results[0].score, 0.0f, 1e-4f);
+}
+
+// ============================================================================
+// Insert → search → insert more → search again
+// ============================================================================
+
+TEST(HNSWIndexTest, InsertAfterSearchMaintainsCorrectness) {
+    constexpr size_t kDim = 4;
+    HNSWIndex index(16, 200, kDim);
+
+    // Phase 1: insert two vectors and search
+    std::vector<float> v1 = {1.0f, 0.0f, 0.0f, 0.0f};
+    std::vector<float> v2 = {0.0f, 1.0f, 0.0f, 0.0f};
+    index.insert(1, v1);
+    index.insert(2, v2);
+
+    std::vector<float> q1 = {1.0f, 0.0f, 0.0f, 0.0f};
+    auto r1 = index.search(q1, 1, 50);
+    ASSERT_EQ(r1.size(), 1u);
+    EXPECT_EQ(r1[0].id, 1u);
+
+    // Phase 2: insert two more vectors and search again
+    std::vector<float> v3 = {0.0f, 0.0f, 1.0f, 0.0f};
+    std::vector<float> v4 = {0.0f, 0.0f, 0.0f, 1.0f};
+    index.insert(3, v3);
+    index.insert(4, v4);
+
+    std::vector<float> q2 = {0.0f, 0.0f, 1.0f, 0.0f};
+    auto r2 = index.search(q2, 1, 50);
+    ASSERT_EQ(r2.size(), 1u);
+    EXPECT_EQ(r2[0].id, 3u);
+}
+
+// ============================================================================
+// Concurrent: 4 writer threads insert 50 vectors each (200 total)
+// ============================================================================
+
+TEST(HNSWIndexTest, ConcurrentMultipleWriters) {
+    constexpr size_t kDim = 8;
+    constexpr size_t kThreads = 4;
+    constexpr size_t kPerThread = 50;
+    HNSWIndex index(16, 200, kDim);
+
+    std::vector<std::thread> writers;
+    writers.reserve(kThreads);
+    for (size_t t = 0; t < kThreads; ++t) {
+        writers.emplace_back([&, t]() {
+            std::mt19937 rng(static_cast<uint32_t>(t * 1000 + 7));
+            for (size_t i = 0; i < kPerThread; ++i) {
+                uint64_t id = static_cast<uint64_t>(t * kPerThread + i);
+                std::vector<float> v = random_vector(rng, kDim);
+                index.insert(id, v);
+            }
+        });
+    }
+    for (auto& w : writers) w.join();
+
+    // With a large ef_search we should be able to retrieve all inserted vectors
+    std::mt19937 qrng(42);
+    size_t found = 0;
+    constexpr size_t kQueries = 20;
+    for (size_t q = 0; q < kQueries; ++q) {
+        std::vector<float> query = random_vector(qrng, kDim);
+        auto results = index.search(query, kThreads * kPerThread, 400);
+        found = std::max(found, results.size());
+    }
+    EXPECT_GE(found, kThreads * kPerThread);
+}
+
+// ============================================================================
+// Concurrent: 2 writer threads + 2 reader threads simultaneously
+// ============================================================================
+
+TEST(HNSWIndexTest, ConcurrentWritersAndReaders) {
+    constexpr size_t kDim = 8;
+    HNSWIndex index(16, 200, kDim);
+
+    // Seed the index so readers always have something to find
+    std::mt19937 seed_rng(0);
+    for (uint64_t i = 0; i < 10; ++i) {
+        std::vector<float> v = random_vector(seed_rng, kDim);
+        index.insert(i, v);
+    }
+
+    std::vector<std::thread> threads;
+    threads.reserve(4);
+
+    // Writer 1
+    threads.emplace_back([&]() {
+        std::mt19937 rng(100);
+        for (uint64_t i = 10; i < 60; ++i) {
+            std::vector<float> v = random_vector(rng, kDim);
+            index.insert(i, v);
+        }
+    });
+    // Writer 2
+    threads.emplace_back([&]() {
+        std::mt19937 rng(200);
+        for (uint64_t i = 60; i < 110; ++i) {
+            std::vector<float> v = random_vector(rng, kDim);
+            index.insert(i, v);
+        }
+    });
+    // Reader 1
+    threads.emplace_back([&]() {
+        std::mt19937 rng(300);
+        for (int i = 0; i < 50; ++i) {
+            std::vector<float> q = random_vector(rng, kDim);
+            auto results = index.search(q, 5, 50);
+            for (const auto& r : results) {
+                EXPECT_GE(r.score, 0.0f);
+            }
+        }
+    });
+    // Reader 2
+    threads.emplace_back([&]() {
+        std::mt19937 rng(400);
+        for (int i = 0; i < 50; ++i) {
+            std::vector<float> q = random_vector(rng, kDim);
+            auto results = index.search(q, 5, 50);
+            for (const auto& r : results) {
+                EXPECT_GE(r.score, 0.0f);
+            }
+        }
+    });
+
+    for (auto& t : threads) t.join();
+    // No crash, no deadlock = pass
+}
+
+// ============================================================================
+// High-dimensional vectors (dim=512)
+// ============================================================================
+
+TEST(HNSWIndexTest, HighDimensional) {
+    constexpr size_t kDim = 512;
+    constexpr size_t kNumVectors = 50;
+    HNSWIndex index(16, 200, kDim);
+
+    std::mt19937 rng(54321);
+    for (uint64_t i = 0; i < kNumVectors; ++i) {
+        std::vector<float> v = random_vector(rng, kDim);
+        index.insert(i, v);
+    }
+
+    std::vector<float> query = random_vector(rng, kDim);
+    auto results = index.search(query, 5, 50);
+    ASSERT_FALSE(results.empty());
+    for (const auto& r : results) {
+        EXPECT_GE(r.score, 0.0f);
+    }
+}
+
+// ============================================================================
+// Large ef_search on a small index (ef_search >> index size)
+// ============================================================================
+
+TEST(HNSWIndexTest, LargeEfSearch) {
+    constexpr size_t kDim = 4;
+    constexpr size_t kNumVectors = 20;
+    HNSWIndex index(16, 200, kDim);
+
+    std::mt19937 rng(99999);
+    for (uint64_t i = 0; i < kNumVectors; ++i) {
+        std::vector<float> v = random_vector(rng, kDim);
+        index.insert(i, v);
+    }
+
+    std::vector<float> query = random_vector(rng, kDim);
+    // ef_search=10000 >> index size: should not crash
+    auto results = index.search(query, 5, 10000);
+    EXPECT_LE(results.size(), kNumVectors);
+    EXPECT_GE(results.size(), 1u);
+    for (const auto& r : results) {
+        EXPECT_GE(r.score, 0.0f);
+    }
+}
+
 }  // namespace
 }  // namespace tamdb

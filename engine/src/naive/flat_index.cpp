@@ -22,6 +22,8 @@ void FlatIndex::insert(uint64_t id, std::span<const float> vector) {
 
 
 std::vector<SearchResult> FlatIndex::search(std::span<const float> query, size_t top_k) const {
+    // TODO(bug): No query dimension validation — search with mismatched query dimension causes undefined behavior. Add dimension check like insert(). — 
+    // TODO(bug): No guard for top_k=0 — behavior is technically correct but fragile. Add early return for k=0. — 
 
     auto compare = [](const SearchResult& a, const SearchResult& b) {
         return a.score < b.score;

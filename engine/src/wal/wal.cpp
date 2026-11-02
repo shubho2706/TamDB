@@ -81,6 +81,7 @@ bool WriteAheadLogger::replay(HNSWIndexPtr hnswPtr) {
         uint32_t vector_size = 0;
         ssize_t bytes_read = ::read(fd, &vector_size, sizeof(uint32_t));
         if(bytes_read == 0) {
+            ::close(fd);
             return true; // successful replay done
         }
 

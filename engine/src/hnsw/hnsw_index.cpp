@@ -227,6 +227,7 @@ std::vector<SearchResult> HNSWIndex::search(std::span<const float> query_vector,
 
 
 uint32_t HNSWIndex::random_layer() {
+    // TODO(bug): Division by zero when M=1 since log(1)=0. Guard against M <= 1. — 
     return std::floor( (-1) * std::log(_level_dist(_rng)) * (1 / std::log(_M)));
 }
 
